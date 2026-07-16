@@ -5,3 +5,9 @@ databaseChangeLog:
       file: db/changelog/changes/002-create-chat-tables.yaml
   - include:
       file: db/changelog/changes/003-insert-chat-test-data.yaml
+  - include:
+      file: db/changelog/changes/004-add-event-fields.yaml
+  - include:
+      file: db/changelog/changes/005-create-tags-tables.yaml
+  - include:
+      file: db/changelog/changes/006-insert-tags-test-data.yaml

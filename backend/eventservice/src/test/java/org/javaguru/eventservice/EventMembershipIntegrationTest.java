@@ -28,7 +28,7 @@ class EventMembershipIntegrationTest {
     void joinAddsParticipantToCyclingEvent() throws Exception {
         mockMvc.perform(post("/eventservice/api/events/e-cycling-1/join")
                         .header("X-User-Id", "2"))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
     }
 
     /**
@@ -40,9 +40,9 @@ class EventMembershipIntegrationTest {
     void joinIsIdempotent() throws Exception {
         mockMvc.perform(post("/eventservice/api/events/e-cycling-1/join")
                         .header("X-User-Id", "2"))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
         mockMvc.perform(post("/eventservice/api/events/e-cycling-1/join")
                         .header("X-User-Id", "2"))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
     }
 }

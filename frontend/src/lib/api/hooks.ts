@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { api, USING_MOCKS } from "./client";
 import { USING_MOCK_CHATS } from "./http/chats";
+import { USING_MOCK_EVENTS } from "./http/events";
 import { httpEventMembership } from "./http/eventMembership";
 import {
   appendMessageToCache,
@@ -30,27 +31,33 @@ export { qk };
 
 /* --- Events ---------------------------------------------------------------- */
 export function useEvents(query: EventListQuery = {}) {
+  const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
     queryKey: qk.eventList(query),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => api.events.list({ ...query, cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
 export function useEvent(id: string) {
+  const userId = useAuth((s) => s.userId);
   return useQuery({
     queryKey: qk.eventDetail(id),
     queryFn: () => api.events.get(id),
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
 export function useMyEvents(scope: MyEventsScope) {
+  const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
     queryKey: qk.eventsMine(scope),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => api.events.mine(scope, { cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
@@ -70,6 +77,9 @@ function useMembershipMutation(action: "join" | "leave") {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      if (!USING_MOCK_EVENTS && !USING_MOCK_CHATS) {
+        return action === "join" ? api.events.join(id) : api.events.leave(id);
+      }
       if (!USING_MOCK_CHATS) {
         if (action === "join") {
           await httpEventMembership.join(id);
@@ -106,10 +116,12 @@ export function useCreateEvent() {
 /* --- Map ------------------------------------------------------------------- */
 
 export function usePins(query: EventListQuery = {}) {
+  const userId = useAuth((s) => s.userId);
   return useQuery({
     queryKey: qk.pins(query),
     queryFn: () => api.map.pins(query),
-    placeholderData: (prev) => prev, // Keep old pins while re-filtering.
+    placeholderData: (prev) => prev,
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 

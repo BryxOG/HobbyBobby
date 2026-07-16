@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-insert-tags-test-data
+      author: eventservice
+      changes:
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-friendly" }
+              - column: { name: label, value: "Дружеский" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-beginners" }
+              - column: { name: label, value: "Для новичков" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-competitive" }
+              - column: { name: label, value: "Соревновательный" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-outdoor" }
+              - column: { name: label, value: "На улице" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-indoor" }
+              - column: { name: label, value: "В помещении" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-free" }
+              - column: { name: label, value: "Бесплатно" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-evening" }
+              - column: { name: label, value: "Вечер" }
+        - insert:
+            tableName: tags
+            columns:
+              - column: { name: id, value: "t-weekend" }
+              - column: { name: label, value: "Выходные" }
