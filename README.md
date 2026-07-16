@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HobbyBobby
 
-## Getting Started
+Поиск людей по интересам и организация ивентов — спорт, хобби, встречи.
+Одно PWA-приложение на Next.js: ставится на главный экран Android, iOS и
+десктопа, отдельных нативных клиентов не будет.
 
-First, run the development server:
+> **Статус: фронт готов, бэкенда пока нет.** Все данные — моки в памяти за
+> типизированным контрактом (`src/lib/api/types.ts`). Подключение
+> микросервисов = замена одной строки в `src/lib/api/client.ts`.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ключи и внешние аккаунты не нужны: карта — MapLibre GL на тайлах
+OpenStreetMap.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Что уже работает
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Таб | Экраны |
+|---|---|
+| **Ивенты** | Список с поиском, фильтром по типам и пагинацией по 10 → детали ивента с карточкой организатора (LVL, рейтинг), списком участников и кнопкой Участвовать/Отменить |
+| **Чаты** | Список чатов по ивентам с превью «Вы: … · 1 нед.» и счётчиком непрочитанных → чат с отправкой сообщений |
+| **Создать (+)** | Мастер: Выберите тип → Детали (с валидацией) → Публикация 50 ₽ → Опубликовано → Смотреть карту |
+| **Карта** | MapLibre, эмодзи-пины по типам активности, фильтр, своё местоположение, карточка по тапу |
+| **Профиль** | Меню с переключателем темы → Профиль (счётчики, ✏️ по каждому полю), Мои события (Организую/Участвую), Интересы, Настройки |
 
-## Learn More
+Светлая и тёмная темы — обе из эскиза, переключаются вручную и переживают
+перезагрузку. PWA устанавливается, оболочка и тайлы карты работают офлайн.
 
-To learn more about Next.js, take a look at the following resources:
+## Скрипты
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run build      # прод-сборка
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint
+npm run icons      # перегенерировать иконки PWA
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Документы
 
-## Deploy on Vercel
+- `docs/sketch.excalidraw` — исходный эскиз, 34 экрана (источник истины по UI)
+- `docs/EVENTS_SERVICE_MVP.md` — требования к MVP
+- `AGENTS.md` — архитектура, соглашения и грабли
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Дальше
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Аутентификация (JWT + OAuth), геокодинг адреса, реальные платежи за
+публикацию, push через NotificationService, ранжирование ленты
+(подписки + теги + гео), follow-система.

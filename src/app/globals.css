@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
+/* Theme is toggled manually (☀️/🌙 in the user menu), not by OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Palette values are taken from the excalidraw sketch (Open Color). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --surface: #f8f9fa;
+  --elevated: #e9ecef;
+  --border: #ced4da;
+  --fg: #1e1e1e;
+  --fg-muted: #868e96;
+  --primary: #228be6;
+  --primary-fg: #ffffff;
+  --success: #2f9e44;
+  --danger: #e03131;
+  --bubble-in: #e7f5ff;
+  --bubble-out: #228be6;
+  --tabbar: rgb(248 249 250 / 0.82);
 }
 
+.dark {
+  --bg: #000000;
+  --surface: #1d1d1d;
+  --elevated: #343a40;
+  --border: #343a40;
+  --fg: #ffffff;
+  --fg-muted: #868e96;
+  --primary: #1971c2;
+  --primary-fg: #ffffff;
+  --success: #2f9e44;
+  --danger: #fa5252;
+  --bubble-in: #343a40;
+  --bubble-out: #1971c2;
+  --tabbar: rgb(29 29 29 / 0.82);
+}
+
+/* `inline` keeps utilities pointing at the var itself, so .dark overrides apply. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-bubble-in: var(--bubble-in);
+  --color-bubble-out: var(--bubble-out);
+  --color-tabbar: var(--tabbar);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --radius-card: 14px;
+  --radius-sheet: 18px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  /* Keep the installed PWA from rubber-banding like a web page. */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+/* iOS skips autofocus zoom only when inputs are >=16px. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Map markers are built with createElement, so Tailwind can't see their
+   classes — they're styled here instead. */
+.hb-pin {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.hb-pin:active {
+  transform: scale(0.9);
+}
+
+.hb-pin--active {
+  border-color: var(--primary);
+  transform: scale(1.18);
+  z-index: 1;
+}
+
+.hb-me {
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  border: 3px solid #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgb(34 139 230 / 0.25);
+}
+
+/* MapLibre's default controls read as "web", not iOS. */
+.maplibregl-ctrl-group {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
