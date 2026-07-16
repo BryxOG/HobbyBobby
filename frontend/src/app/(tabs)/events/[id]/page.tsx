@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use } from "react";
 import { useEvent } from "@/lib/api/hooks";
+import { useSyncChatMembership } from "@/lib/api/hooks/useSyncChatMembership";
 import { formatEventRange } from "@/lib/format";
 import { ru } from "@/lib/i18n/ru";
 import { ActivityIcon } from "@/components/events/ActivityIcon";
@@ -19,6 +20,7 @@ export default function EventDetailPage({
 }) {
   const { id } = use(params);
   const { data: event, isPending, isError, refetch } = useEvent(id);
+  useSyncChatMembership(id, event?.isJoined);
 
   if (isError) {
     return (
