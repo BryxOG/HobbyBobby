@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMyEvents } from "@/lib/api/hooks";
+import { USING_MOCKS } from "@/lib/api/client";
 import type { MyEventsScope } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { EventCard } from "@/components/events/EventCard";
 import { Button } from "@/components/ui/Button";
 import { Header } from "@/components/ui/Header";
@@ -15,7 +18,17 @@ import {
 } from "@/components/ui/States";
 
 export default function MyEventsPage() {
+  const router = useRouter();
+  const userId = useAuth((s) => s.userId);
+  const isLoggedIn = USING_MOCKS || Boolean(userId);
+
   const [scope, setScope] = useState<MyEventsScope>("organizing");
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.replace("/login");
+    }
+  }, [isLoggedIn, router]);
   const {
     data,
     isPending,
@@ -27,6 +40,10 @@ export default function MyEventsPage() {
   } = useMyEvents(scope);
 
   const events = data?.pages.flatMap((p) => p.items) ?? [];
+
+  if (!isLoggedIn) {
+    return <Header title={ru.myEvents.title} back="/menu" />;
+  }
 
   return (
     <>

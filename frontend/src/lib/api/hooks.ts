@@ -30,14 +30,39 @@ import { qk } from "./queryKeys";
 export { qk };
 
 /* --- Events ---------------------------------------------------------------- */
-export function useEvents(query: EventListQuery = {}) {
+export function useEvents(query: EventListQuery = {}, active = true) {
   const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
     queryKey: qk.eventList(query),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => api.events.list({ ...query, cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
-    enabled: USING_MOCK_EVENTS || Boolean(userId),
+    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
+  });
+}
+
+/** Лента «Мои ивенты» — организую + участвую, объединённые и отсортированные. */
+export function useMyEventsFeed(query: EventListQuery = {}, active = true) {
+  const userId = useAuth((s) => s.userId);
+  return useInfiniteQuery({
+    queryKey: qk.eventsMineFeed(query),
+    initialPageParam: null as string | null,
+    queryFn: async () => {
+      const [organizing, participating] = await Promise.all([
+        api.events.mine("organizing", query),
+        api.events.mine("participating", query),
+      ]);
+      const byId = new Map<string, EventItem>();
+      for (const event of [...organizing.items, ...participating.items]) {
+        byId.set(event.id, event);
+      }
+      const items = [...byId.values()].sort((a, b) =>
+        a.startsAt.localeCompare(b.startsAt),
+      );
+      return { items, nextCursor: null, total: items.length };
+    },
+    getNextPageParam: () => null,
+    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
   });
 }
 
@@ -109,6 +134,7 @@ export function useCreateEvent() {
       qc.invalidateQueries({ queryKey: qk.events });
       qc.invalidateQueries({ queryKey: ["map"] });
       qc.invalidateQueries({ queryKey: qk.me });
+      qc.invalidateQueries({ queryKey: ["events", "mine"] });
     },
   });
 }
