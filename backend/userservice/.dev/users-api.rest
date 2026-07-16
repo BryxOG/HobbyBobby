@@ -8,6 +8,10 @@ GET {{host}}/by-email?email=unschikov@gmail.com
 Content-Type: application/json
 
 ###
+GET {{host}}/by-ids?ids=1,2
+Content-Type: application/json
+
+###
 POST {{host}}
 Content-Type: application/json
 

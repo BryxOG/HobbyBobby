@@ -54,6 +54,17 @@ public class UserController {
     }
 
     /**
+     * Возвращает пользователей по списку идентификаторов.
+     *
+     * @param ids идентификаторы пользователей (повторы и отсутствующие id игнорируются)
+     * @return список найденных пользователей
+     */
+    @GetMapping("/by-ids")
+    public List<UserResponse> findByIds(@RequestParam List<Long> ids) {
+        return userService.findByIds(ids);
+    }
+
+    /**
      * Возвращает пользователя по идентификатору.
      *
      * @param id идентификатор пользователя
