@@ -1,1 +1,13 @@
 databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-create-users-table.yaml
+  - include:
+      file: db/changelog/changes/002-create-interests-table.yaml
+  - include:
+      file: db/changelog/changes/003-insert-users-test-data.yaml
+  - include:
+      file: db/changelog/changes/004-insert-interests-test-data.yaml
+  - include:
+      file: db/changelog/changes/005-create-user-interests-table.yaml
+  - include:
+      file: db/changelog/changes/006-insert-user-interests-test-data.yaml

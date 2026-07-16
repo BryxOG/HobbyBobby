@@ -1,0 +1,22 @@
+@host = http://localhost:9002/userservice/api/users
+
+GET {{host}}
+Content-Type: application/json
+
+###
+GET {{host}}/by-email?email=unschikov@gmail.com
+Content-Type: application/json
+
+###
+POST {{host}}
+Content-Type: application/json
+
+{
+  "name": "Тест",
+  "email": "test.user@example.com",
+  "city": "Москва",
+  "about": "Новый пользователь",
+  "interestIds": [1, 2, 6]
+}
+
+###

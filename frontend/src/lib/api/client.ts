@@ -1,13 +1,18 @@
+import { httpUsersClient, USING_MOCK_USERS } from "./http/users";
 import { mockClient } from "./mock";
 import type { ApiClient } from "./types";
 
 /**
  * The seam between the UI and the backend.
  *
- * Today every call resolves against in-memory fixtures. When EventService and
- * UserService exist, add an `httpClient` implementing `ApiClient` against
- * NEXT_PUBLIC_API_URL and switch here — no screen or hook changes.
+ * Events/chats/map still use mocks. Users go to UserService when
+ * NEXT_PUBLIC_USE_MOCK_USERS is not "true".
  */
-export const api: ApiClient = mockClient;
+export const USING_MOCKS = USING_MOCK_USERS;
 
-export const USING_MOCKS = true;
+export const api: ApiClient = USING_MOCK_USERS
+  ? mockClient
+  : {
+      ...mockClient,
+      users: httpUsersClient,
+    };

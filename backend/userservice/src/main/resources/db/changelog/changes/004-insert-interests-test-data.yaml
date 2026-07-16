@@ -1,0 +1,75 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-insert-interests-test-data
+      author: userservice
+      changes:
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Футбол" }
+              - column: { name: image, value: "/image/football" }
+              - column: { name: description, value: "Поиграть в футбол на открытом поле" }
+              - column: { name: tag, value: "sport" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Баскетбол" }
+              - column: { name: image, value: "/image/basketball" }
+              - column: { name: description, value: "Поиграть в баскетбол в зале или на площадке" }
+              - column: { name: tag, value: "sport" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Волейбол" }
+              - column: { name: image, value: "/image/volleyball" }
+              - column: { name: description, value: "Собрать команду для пляжного или классического волейбола" }
+              - column: { name: tag, value: "sport" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Теннис" }
+              - column: { name: image, value: "/image/tennis" }
+              - column: { name: description, value: "Найти партнёра для игры в большой теннис" }
+              - column: { name: tag, value: "sport" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Велоспорт" }
+              - column: { name: image, value: "/image/cycling" }
+              - column: { name: description, value: "Групповые велопрогулки и заезды на выходных" }
+              - column: { name: tag, value: "sport" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Караоке" }
+              - column: { name: image, value: "/image/karaoke" }
+              - column: { name: description, value: "Спеть любимые песни в дружеской компании" }
+              - column: { name: tag, value: "social" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Настольные игры" }
+              - column: { name: image, value: "/image/boardgames" }
+              - column: { name: description, value: "Вечер настольных игр: от классики до современных хитов" }
+              - column: { name: tag, value: "hobby" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Рисование" }
+              - column: { name: image, value: "/image/art" }
+              - column: { name: description, value: "Совместные скетчи и мастер-классы по акварели" }
+              - column: { name: tag, value: "hobby" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Кофе" }
+              - column: { name: image, value: "/image/coffee" }
+              - column: { name: description, value: "Встречи в кофейнях и нетворкинг за чашкой эспрессо" }
+              - column: { name: tag, value: "social" }
+        - insert:
+            tableName: interests
+            columns:
+              - column: { name: name, value: "Театр" }
+              - column: { name: image, value: "/image/theatre" }
+              - column: { name: description, value: "Сходить на спектакль и обсудить впечатления после" }
+              - column: { name: tag, value: "social" }

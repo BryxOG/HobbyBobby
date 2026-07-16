@@ -1,17 +1,33 @@
 "use client";
 
-import { useMe } from "@/lib/api/hooks";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMe, qk } from "@/lib/api/hooks";
+import { USING_MOCKS } from "@/lib/api/client";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { useSettings } from "@/lib/stores/settings";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
 import { Header } from "@/components/ui/Header";
 import { ListGroup, ListRow } from "@/components/ui/List";
 import { Skeleton } from "@/components/ui/States";
 
 export default function MenuPage() {
-  const { data: me } = useMe();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const userId = useAuth((s) => s.userId);
+  const logout = useAuth((s) => s.logout);
+  const isLoggedIn = USING_MOCKS || Boolean(userId);
+  const { data: me, isPending } = useMe();
   const theme = useSettings((s) => s.theme);
   const toggleTheme = useSettings((s) => s.toggleTheme);
+
+  function handleLogout() {
+    logout();
+    qc.removeQueries({ queryKey: qk.me });
+    router.push("/login");
+  }
 
   return (
     <>
@@ -32,7 +48,15 @@ export default function MenuPage() {
 
       <main className="flex-1 space-y-6 px-4 py-3">
         <section className="flex items-center gap-3 rounded-card bg-surface p-3">
-          {me ? (
+          {isLoggedIn && isPending ? (
+            <>
+              <Skeleton className="size-16 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-1/3" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            </>
+          ) : isLoggedIn && me ? (
             <>
               <Avatar user={me} size="lg" />
               <div className="min-w-0 flex-1">
@@ -45,32 +69,45 @@ export default function MenuPage() {
               </div>
             </>
           ) : (
-            <>
-              <Skeleton className="size-16 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-5 w-1/3" />
-                <Skeleton className="h-4 w-2/3" />
+            <div className="flex w-full flex-col items-center gap-3 py-2 text-center">
+              <p className="text-[15px] text-fg-muted">{ru.menu.loginPrompt}</p>
+              <div className="flex w-full gap-2">
+                <Button className="flex-1" onClick={() => router.push("/login")}>
+                  {ru.menu.login}
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="secondary"
+                  onClick={() => router.push("/register")}
+                >
+                  {ru.auth.register}
+                </Button>
               </div>
-            </>
+            </div>
           )}
         </section>
 
         <ListGroup>
-          <ListRow icon="👤" label={ru.menu.profile} href="/menu/profile" />
+          <ListRow
+            icon="👤"
+            label={ru.menu.profile}
+            href={isLoggedIn ? "/menu/profile" : "/login"}
+          />
           <ListRow icon="🎉" label={ru.menu.myEvents} href="/menu/my-events" />
           <ListRow icon="🤔" label={ru.menu.interests} href="/menu/interests" />
           <ListRow icon="⚙️" label={ru.menu.settings} href="/menu/settings" />
         </ListGroup>
 
-        <ListGroup>
-          <ListRow
-            icon="😭"
-            label={ru.menu.logout}
-            danger
-            // Auth lands with UserService; the row exists so the flow is complete.
-            onClick={() => alert("Аутентификация появится вместе с UserService")}
-          />
-        </ListGroup>
+        {isLoggedIn && (
+          <ListGroup>
+            <ListRow
+              icon="😭"
+              label={ru.menu.logout}
+              danger
+              onClick={handleLogout}
+            />
+          </ListGroup>
+        )}
       </main>
     </>
   );

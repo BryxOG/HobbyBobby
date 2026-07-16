@@ -1,0 +1,105 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-insert-users-test-data
+      author: userservice
+      changes:
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Сергей" }
+              - column: { name: email, value: "unschikov@gmail.com" }
+              - column: { name: avatar, value: "/avatar/1243" }
+              - column: { name: level, valueNumeric: 60 }
+              - column: { name: rating, valueNumeric: 4.85 }
+              - column: { name: city, value: "Москва" }
+              - column: { name: about, value: "Люблю футбол, ищу компанию для игр по выходным" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Анна" }
+              - column: { name: email, value: "anna.petrova@mail.ru" }
+              - column: { name: avatar, value: "/avatar/2001" }
+              - column: { name: level, valueNumeric: 45 }
+              - column: { name: rating, valueNumeric: 4.60 }
+              - column: { name: city, value: "Санкт-Петербург" }
+              - column: { name: about, value: "Увлекаюсь йогой и велопрогулками по паркам" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Дмитрий" }
+              - column: { name: email, value: "dmitry.ivanov@gmail.com" }
+              - column: { name: avatar, value: "/avatar/3005" }
+              - column: { name: level, valueNumeric: 72 }
+              - column: { name: rating, valueNumeric: 4.95 }
+              - column: { name: city, value: "Казань" }
+              - column: { name: about, value: "Организую турниры по настольным играм" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Мария" }
+              - column: { name: email, value: "maria.sokolova@yandex.ru" }
+              - column: { name: avatar, value: "/avatar/4012" }
+              - column: { name: level, valueNumeric: 38 }
+              - column: { name: rating, valueNumeric: 4.20 }
+              - column: { name: city, value: "Новосибирск" }
+              - column: { name: about, value: "Люблю караоке и вечерние прогулки с друзьями" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Алексей" }
+              - column: { name: email, value: "alexey.kuznetsov@mail.ru" }
+              - column: { name: avatar, value: "/avatar/5020" }
+              - column: { name: level, valueNumeric: 55 }
+              - column: { name: rating, valueNumeric: 4.70 }
+              - column: { name: city, value: "Екатеринбург" }
+              - column: { name: about, value: "Играю в баскетбол, ищу команду для любительской лиги" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Елена" }
+              - column: { name: email, value: "elena.volkova@gmail.com" }
+              - column: { name: avatar, value: "/avatar/6033" }
+              - column: { name: level, valueNumeric: 29 }
+              - column: { name: rating, valueNumeric: 4.10 }
+              - column: { name: city, value: "Краснодар" }
+              - column: { name: about, value: "Рисую акварелью и хожу на мастер-классы по ремеслам" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Игорь" }
+              - column: { name: email, value: "igor.morozov@yandex.ru" }
+              - column: { name: avatar, value: "/avatar/7044" }
+              - column: { name: level, valueNumeric: 81 }
+              - column: { name: rating, valueNumeric: 4.90 }
+              - column: { name: city, value: "Воронеж" }
+              - column: { name: about, value: "Фанат велоспорта, участвую в групповых заездах" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Ольга" }
+              - column: { name: email, value: "olga.fedorova@mail.ru" }
+              - column: { name: avatar, value: "/avatar/8055" }
+              - column: { name: level, valueNumeric: 33 }
+              - column: { name: rating, valueNumeric: 4.35 }
+              - column: { name: city, value: "Самара" }
+              - column: { name: about, value: "Люблю театр и культурные мероприятия в центре города" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Павел" }
+              - column: { name: email, value: "pavel.novikov@gmail.com" }
+              - column: { name: avatar, value: "/avatar/9066" }
+              - column: { name: level, valueNumeric: 67 }
+              - column: { name: rating, valueNumeric: 4.75 }
+              - column: { name: city, value: "Ростов-на-Дону" }
+              - column: { name: about, value: "Играю в теннис, открыт к спаррингам любого уровня" }
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: name, value: "Наталья" }
+              - column: { name: email, value: "natalia.belova@yandex.ru" }
+              - column: { name: avatar, value: "/avatar/1077" }
+              - column: { name: level, valueNumeric: 41 }
+              - column: { name: rating, valueNumeric: 4.55 }
+              - column: { name: city, value: "Нижний Новгород" }
+              - column: { name: about, value: "Обожаю кофейни и нетворкинг-встречи по вечерам" }
