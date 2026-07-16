@@ -1,0 +1,30 @@
+# EventService — участие (синхронизация с чатом)
+
+### Присоединиться (Anna id=2 получит доступ к чату)
+POST http://localhost:9001/eventservice/api/events/e-cycling-1/join
+X-User-Id: 2
+
+### Покинуть
+POST http://localhost:9001/eventservice/api/events/e-cycling-1/leave
+X-User-Id: 2
+
+GET http://localhost:9001/eventservice/api/chats
+X-User-Id: 1
+
+### История сообщений
+GET http://localhost:9001/eventservice/api/chats/e-cycling-1/messages
+X-User-Id: 1
+
+### Отправить сообщение (публикует в Kafka → realtime-service пушит в WS)
+POST http://localhost:9001/eventservice/api/chats/e-cycling-1/messages
+X-User-Id: 1
+Content-Type: application/json
+
+{
+  "text": "Тест из REST + Kafka"
+}
+
+### WebSocket (realtime-service)
+# ws://localhost:9003/ws?userId=7
+# После connect ожидайте JSON:
+# {"type":"MESSAGE_NEW","messageId":"...","eventId":"...","author":{...},"text":"...","sentAt":"...","isOwn":false}

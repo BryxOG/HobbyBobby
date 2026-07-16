@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
+import { ChatRealtimeBridge } from "@/components/chat/ChatRealtimeBridge";
 import { useSettings } from "@/lib/stores/settings";
 
 function makeQueryClient() {
@@ -38,6 +39,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeSync />
+      <ChatRealtimeBridge />
       {children}
     </QueryClientProvider>
   );
