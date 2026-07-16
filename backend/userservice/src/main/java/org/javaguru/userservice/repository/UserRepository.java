@@ -1,5 +1,6 @@
 package org.javaguru.userservice.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.javaguru.userservice.entity.User;
@@ -55,4 +56,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @EntityGraph(attributePaths = "interests")
     Optional<User> findByEmailIgnoreCase(String email);
+
+    /**
+     * Возвращает пользователей по списку идентификаторов вместе с интересами.
+     *
+     * @param ids идентификаторы пользователей
+     * @return найденные пользователи
+     */
+    @EntityGraph(attributePaths = "interests")
+    List<User> findAllByIdIn(Collection<Long> ids);
 }

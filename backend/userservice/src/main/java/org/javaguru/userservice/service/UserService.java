@@ -68,6 +68,23 @@ public class UserService {
     }
 
     /**
+     * Возвращает пользователей по списку идентификаторов.
+     * Отсутствующие id пропускаются; порядок не гарантируется.
+     *
+     * @param ids идентификаторы пользователей
+     * @return список найденных пользователей
+     */
+    public List<UserResponse> findByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinctIds = ids.stream().distinct().toList();
+        return userRepository.findAllByIdIn(distinctIds).stream()
+                .map(userMapper::toResponse)
+                .toList();
+    }
+
+    /**
      * Возвращает интересы пользователя.
      *
      * @param id идентификатор пользователя
