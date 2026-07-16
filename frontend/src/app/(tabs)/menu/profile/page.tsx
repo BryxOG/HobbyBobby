@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMe, useUpdateMe } from "@/lib/api/hooks";
+import { USING_MOCKS } from "@/lib/api/client";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Header } from "@/components/ui/Header";
@@ -13,10 +16,19 @@ type EditableField = "name" | "city" | "bio";
 
 /** Профиль — counters, level, rating, and per-field ✏️ editing from the sketch. */
 export default function ProfilePage() {
+  const router = useRouter();
+  const userId = useAuth((s) => s.userId);
+  const isLoggedIn = USING_MOCKS || Boolean(userId);
   const { data: me, isPending } = useMe();
   const update = useUpdateMe();
   const [editing, setEditing] = useState<EditableField | null>(null);
   const [value, setValue] = useState("");
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.replace("/login");
+    }
+  }, [isLoggedIn, router]);
 
   function start(field: EditableField, current: string) {
     setEditing(field);
@@ -30,7 +42,7 @@ export default function ProfilePage() {
     setEditing(null);
   }
 
-  if (isPending || !me) {
+  if (!isLoggedIn || isPending || !me) {
     return (
       <>
         <Header title={ru.profile.title} back="/menu" />

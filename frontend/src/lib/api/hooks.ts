@@ -6,7 +6,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api } from "./client";
+import { api, USING_MOCKS } from "./client";
+import { useAuth } from "@/lib/stores/auth";
 import type {
   ActivityId,
   EventItem,
@@ -133,7 +134,12 @@ export function useSendMessage(eventId: string) {
 /* --- Users ----------------------------------------------------------------- */
 
 export function useMe() {
-  return useQuery({ queryKey: qk.me, queryFn: () => api.users.me() });
+  const userId = useAuth((s) => s.userId);
+  return useQuery({
+    queryKey: qk.me,
+    queryFn: () => api.users.me(),
+    enabled: USING_MOCKS || Boolean(userId),
+  });
 }
 
 export function useUpdateMe() {

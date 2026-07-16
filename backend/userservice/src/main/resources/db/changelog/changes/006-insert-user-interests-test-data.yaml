@@ -1,0 +1,70 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-insert-user-interests-test-data
+      author: userservice
+      changes:
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 1 }
+              - column: { name: interest_id, valueNumeric: 1 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 1 }
+              - column: { name: interest_id, valueNumeric: 2 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 2 }
+              - column: { name: interest_id, valueNumeric: 5 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 2 }
+              - column: { name: interest_id, valueNumeric: 6 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 3 }
+              - column: { name: interest_id, valueNumeric: 7 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 4 }
+              - column: { name: interest_id, valueNumeric: 6 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 4 }
+              - column: { name: interest_id, valueNumeric: 9 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 5 }
+              - column: { name: interest_id, valueNumeric: 2 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 6 }
+              - column: { name: interest_id, valueNumeric: 8 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 7 }
+              - column: { name: interest_id, valueNumeric: 5 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 8 }
+              - column: { name: interest_id, valueNumeric: 10 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 9 }
+              - column: { name: interest_id, valueNumeric: 4 }
+        - insert:
+            tableName: user_interests
+            columns:
+              - column: { name: user_id, valueNumeric: 10 }
+              - column: { name: interest_id, valueNumeric: 9 }
