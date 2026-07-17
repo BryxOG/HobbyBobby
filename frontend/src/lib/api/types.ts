@@ -73,6 +73,8 @@ export interface UserProfile extends UserSummary {
   location: GeoPoint | null;
 }
 
+export type EventStatus = "ACTIVE" | "CANCELLED";
+
 export interface EventItem {
   id: string;
   title: string;
@@ -88,6 +90,8 @@ export interface EventItem {
   /** Whether the *current* user has joined. Server-derived, never client-guessed. */
   isJoined: boolean;
   rating: number | null;
+  status: EventStatus;
+  cancelledAt: string | null;
 }
 
 /** Trimmed event shape for map pins — avoids shipping descriptions for 500 pins. */
@@ -159,6 +163,14 @@ export interface AppSettings {
 }
 
 /** Payment for the one-off publish step (50 ₽ in the sketch). */
+export type DevicePlatform = "ANDROID" | "WEB";
+
+export interface RegisterDeviceRequest {
+  userId: number;
+  fcmToken: string;
+  platform: DevicePlatform;
+}
+
 export interface PublishQuote {
   amount: number;
   currency: "RUB";
@@ -174,6 +186,7 @@ export interface ApiClient {
     join(id: string): Promise<EventItem>;
     leave(id: string): Promise<EventItem>;
     publishQuote(): Promise<PublishQuote>;
+    cancel(id: string): Promise<EventItem>;
   };
   map: {
     pins(query?: EventListQuery): Promise<EventPin[]>;

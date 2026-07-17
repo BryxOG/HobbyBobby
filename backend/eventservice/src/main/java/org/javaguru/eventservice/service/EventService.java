@@ -20,12 +20,16 @@ import org.javaguru.eventservice.dto.PublishQuoteResponse;
 import org.javaguru.eventservice.dto.TagResponse;
 import org.javaguru.eventservice.dto.UserSummaryResponse;
 import org.javaguru.eventservice.entity.EventEntity;
+import org.javaguru.eventservice.entity.EventStatus;
 import org.javaguru.eventservice.entity.EventParticipantEntity;
 import org.javaguru.eventservice.entity.EventParticipantEntity.EventParticipantId;
 import org.javaguru.eventservice.entity.EventTagEntity;
 import org.javaguru.eventservice.entity.TagEntity;
 import org.javaguru.eventservice.exception.ConflictException;
+import org.javaguru.eventservice.exception.ForbiddenException;
 import org.javaguru.eventservice.exception.ResourceNotFoundException;
+import org.javaguru.eventservice.kafka.EventNotificationProducer;
+import org.javaguru.notification.kafka.EventCancelledEvent;
 import org.javaguru.eventservice.mapper.EventMapper;
 import org.javaguru.eventservice.repository.EventParticipantRepository;
 import org.javaguru.eventservice.repository.EventRepository;
@@ -50,6 +54,7 @@ public class EventService {
     private final TagRepository tagRepository;
     private final UserServiceClient userServiceClient;
     private final EventMapper eventMapper;
+    private final EventNotificationProducer notificationProducer;
 
     /**
      * Возвращает страницу ивентов с фильтрами.
@@ -82,7 +87,9 @@ public class EventService {
             Double radiusKm
     ) {
         List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc(),
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
                 query,
                 activityIds,
                 tagIds,
@@ -160,6 +167,36 @@ public class EventService {
     }
 
     /**
+     * Отменяет ивент организатором и уведомляет участников через Kafka.
+     *
+     * @param eventId       идентификатор ивента
+     * @param currentUserId текущий пользователь
+     * @return обновлённая карточка ивента
+     */
+    @Transactional
+    public EventResponse cancel(String eventId, Long currentUserId) {
+        EventEntity entity = requireEvent(eventId);
+        if (!entity.getOrganizerId().equals(currentUserId)) {
+            throw new ForbiddenException("Только организатор может отменить ивент");
+        }
+        if (entity.getStatus() == EventStatus.CANCELLED) {
+            throw new ConflictException("Ивент уже отменён");
+        }
+        Instant cancelledAt = Instant.now();
+        entity.setStatus(EventStatus.CANCELLED);
+        entity.setCancelledAt(cancelledAt);
+        List<Long> recipients = participantRepository.findUserIdsByEventId(eventId);
+        notificationProducer.publishCancelled(new EventCancelledEvent(
+                entity.getId(),
+                entity.getTitle(),
+                entity.getStartsAt(),
+                cancelledAt,
+                recipients
+        ));
+        return toResponses(List.of(entity), currentUserId).getFirst();
+    }
+
+    /**
      * Создаёт новый ивент от имени текущего пользователя.
      *
      * @param request       данные ивента
@@ -180,6 +217,7 @@ public class EventService {
         entity.setAddress(request.location().address().trim());
         entity.setCapacity(request.capacity());
         entity.setOrganizerId(currentUserId);
+        entity.setStatus(EventStatus.ACTIVE);
 
         Map<Long, UserSummaryResponse> users = userServiceClient.findSummariesByIds(List.of(currentUserId));
         UserSummaryResponse organizer = eventMapper.resolveUser(currentUserId, users);
@@ -220,7 +258,9 @@ public class EventService {
             Double radiusKm
     ) {
         List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc(),
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
                 query,
                 activityIds,
                 tagIds,

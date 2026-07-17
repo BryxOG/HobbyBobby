@@ -22,6 +22,8 @@ public record EventResponse(
         int capacity,
         List<TagResponse> tags,
         boolean isJoined,
-        BigDecimal rating
+        BigDecimal rating,
+        String status,
+        Instant cancelledAt
 ) {
 }

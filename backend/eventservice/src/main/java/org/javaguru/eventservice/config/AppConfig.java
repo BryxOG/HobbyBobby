@@ -11,7 +11,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Общая конфигурация приложения.
  */
 @Configuration
-@EnableConfigurationProperties({UserServiceProperties.class, ChatProperties.class})
+@EnableConfigurationProperties({UserServiceProperties.class, ChatProperties.class, EventNotificationProperties.class})
 public class AppConfig implements WebMvcConfigurer {
 
     /**

@@ -25,8 +25,8 @@ npm run icons      # перегенерировать PWA-иконки
 ## Стек
 
 Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind v4 ·
-MapLibre GL + OSM (без API-ключа) · TanStack Query · Zustand · PWA со своим
-service worker.
+Yandex Maps JS API v3 (ключ в `NEXT_PUBLIC_YANDEX_MAPS_API_KEY`) · TanStack
+Query · Zustand · PWA со своим service worker.
 
 ## Источник истины по UI
 
@@ -46,7 +46,7 @@ src/
     events/            список → [id] детали
     chats/             список → [id] чат
     create/            мастер: тип → details → publish → done
-    map/               MapLibre + пины
+    map/               Yandex Maps + пины
     menu/              profile / my-events / interests / settings
   lib/
     api/types.ts       ← ДОМЕННЫЙ КОНТРАКТ. Под него равнять DTO сервисов.

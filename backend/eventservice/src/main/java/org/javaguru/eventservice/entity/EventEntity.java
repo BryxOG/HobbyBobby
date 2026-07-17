@@ -2,6 +2,8 @@ package org.javaguru.eventservice.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -54,4 +56,14 @@ public class EventEntity {
 
     @Column(name = "rating")
     private BigDecimal rating;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private EventStatus status = EventStatus.ACTIVE;
+
+    @Column(name = "reminder_sent_at")
+    private Instant reminderSentAt;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
 }

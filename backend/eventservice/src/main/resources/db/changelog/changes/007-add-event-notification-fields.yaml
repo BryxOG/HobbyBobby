@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-add-event-notification-fields
+      author: eventservice
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: status
+                  type: VARCHAR(16)
+                  defaultValue: ACTIVE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reminder_sent_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: cancelled_at
+                  type: TIMESTAMPTZ
