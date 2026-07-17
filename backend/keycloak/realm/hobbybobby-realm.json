@@ -1,0 +1,67 @@
+{
+  "realm": "hobbybobby",
+  "enabled": true,
+  "displayName": "HobbyBobby",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "USER",
+        "description": "Default authenticated HobbyBobby user"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Administrative HobbyBobby user"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "hobbybobby-pwa",
+      "name": "HobbyBobby PWA",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "hobbybobby-cli",
+      "name": "HobbyBobby Local CLI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "demo",
+      "email": "demo@hobbybobby.local",
+      "firstName": "Demo",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "USER"
+      ]
+    }
+  ]
+}
