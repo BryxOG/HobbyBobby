@@ -142,6 +142,33 @@ export interface EventListQuery {
   radiusKm?: number;
 }
 
+/** Результат NL-парсера (POST /events/search/parse). */
+export interface SearchInterpretedAs {
+  when: string | null;
+  what: string | null;
+  where: string | null;
+}
+
+export interface SearchIntent {
+  rawQuery: string;
+  activityIds: ActivityId[];
+  from: string | null;
+  to: string | null;
+  near: GeoPoint | null;
+  radiusKm: number | null;
+  city: string | null;
+  tagIds: string[];
+  freeText: string | null;
+  interpretedAs: SearchInterpretedAs;
+  confidence: number;
+}
+
+export interface ParseSearchInput {
+  query: string;
+  userLat?: number | null;
+  userLng?: number | null;
+}
+
 export type MyEventsScope = "organizing" | "participating";
 
 export interface CreateEventInput {
@@ -187,6 +214,7 @@ export interface ApiClient {
     leave(id: string): Promise<EventItem>;
     publishQuote(): Promise<PublishQuote>;
     cancel(id: string): Promise<EventItem>;
+    parseSearch(input: ParseSearchInput): Promise<SearchIntent>;
   };
   map: {
     pins(query?: EventListQuery): Promise<EventPin[]>;

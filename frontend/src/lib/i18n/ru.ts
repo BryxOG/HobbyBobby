@@ -56,7 +56,7 @@ export const ru = {
 
   events: {
     title: "Ивенты",
-    searchPlaceholder: "Поиск по ивентам",
+    searchPlaceholder: "сегодня футбол в Москве",
     createdBy: "Создал(а)",
     description: "Описание",
     dateTime: "Дата и время",
@@ -77,6 +77,7 @@ export const ru = {
     myEvents: "Мои ивенты",
     emptyMine: "У вас пока нет ивентов",
     emptyMineHint: "Создайте свой или вступите в существующий",
+    interpreted: "Поняли как",
   },
 
   create: {

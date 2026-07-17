@@ -7,7 +7,9 @@ import type {
   EventPin,
   MyEventsScope,
   Page,
+  ParseSearchInput,
   PublishQuote,
+  SearchIntent,
   Tag,
 } from "../types";
 
@@ -133,6 +135,17 @@ export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
           method: "POST",
         }),
       );
+    },
+
+    async parseSearch(input: ParseSearchInput): Promise<SearchIntent> {
+      return eventRequest<SearchIntent>("/events/search/parse", {
+        method: "POST",
+        body: JSON.stringify({
+          query: input.query,
+          userLat: input.userLat ?? null,
+          userLng: input.userLng ?? null,
+        }),
+      });
     },
   },
 

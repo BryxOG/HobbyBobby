@@ -7,7 +7,10 @@ import lombok.RequiredArgsConstructor;
 import org.javaguru.eventservice.dto.CreateEventRequest;
 import org.javaguru.eventservice.dto.EventPageResponse;
 import org.javaguru.eventservice.dto.EventResponse;
+import org.javaguru.eventservice.dto.ParseSearchRequest;
 import org.javaguru.eventservice.dto.PublishQuoteResponse;
+import org.javaguru.eventservice.dto.SearchIntentResponse;
+import org.javaguru.eventservice.search.RuleBasedSearchIntentParser;
 import org.javaguru.eventservice.service.EventService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventController {
 
     private final EventService eventService;
+    private final RuleBasedSearchIntentParser searchIntentParser;
+
+    /**
+     * Разбирает NL-запрос в структурированные фильтры (правила, без LLM).
+     *
+     * @param request текст и опциональный GPS
+     * @return SearchIntent
+     */
+    @PostMapping("/search/parse")
+    public SearchIntentResponse parseSearch(@Valid @RequestBody ParseSearchRequest request) {
+        return searchIntentParser.parse(request.query(), request.userLat(), request.userLng());
+    }
 
     /**
      * Возвращает страницу ивентов.

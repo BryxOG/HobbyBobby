@@ -186,6 +186,25 @@ export const mockClient: ApiClient = {
       event.cancelledAt = new Date().toISOString();
       return latency(clone(event));
     },
+
+    async parseSearch(input) {
+      return latency({
+        rawQuery: input.query,
+        activityIds: [],
+        from: null,
+        to: null,
+        near:
+          input.userLat != null && input.userLng != null
+            ? { lat: input.userLat, lng: input.userLng }
+            : null,
+        radiusKm: null,
+        city: null,
+        tagIds: [],
+        freeText: input.query.trim() || null,
+        interpretedAs: { when: null, what: null, where: null },
+        confidence: 0.2,
+      });
+    },
   },
 
   map: {

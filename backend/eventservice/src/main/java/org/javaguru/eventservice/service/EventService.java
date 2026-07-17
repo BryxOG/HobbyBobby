@@ -37,6 +37,8 @@ import org.javaguru.eventservice.repository.EventRepository;
 import org.javaguru.eventservice.repository.EventTagRepository;
 import org.javaguru.eventservice.repository.TagRepository;
 import org.javaguru.eventservice.search.FullTextQueryBuilder;
+import org.javaguru.eventservice.search.RuleBasedSearchIntentParser;
+import org.javaguru.eventservice.dto.SearchIntentResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +59,7 @@ public class EventService {
     private final UserServiceClient userServiceClient;
     private final EventMapper eventMapper;
     private final EventNotificationProducer notificationProducer;
+    private final RuleBasedSearchIntentParser searchIntentParser;
 
     /**
      * Возвращает страницу ивентов с фильтрами.
@@ -88,10 +91,7 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
-        List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc().stream()
-                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
-                        .toList(),
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -100,6 +100,19 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         return paginate(filtered, currentUserId, cursor, limit);
     }
@@ -141,8 +154,7 @@ public class EventService {
                 .filter(event -> matchesScope(event, currentUserId, scope))
                 .sorted(Comparator.comparing(EventEntity::getStartsAt))
                 .toList();
-        List<EventEntity> filtered = filterEvents(
-                scoped,
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -151,6 +163,17 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                scoped,
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         return paginate(filtered, currentUserId, cursor, limit);
     }
@@ -259,10 +282,7 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
-        List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc().stream()
-                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
-                        .toList(),
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -271,6 +291,19 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         Map<String, Integer> counts = participantCounts(filtered);
         return filtered.stream()
@@ -452,19 +485,65 @@ public class EventService {
     }
 
     /**
-     * Фильтрует ивенты по параметрам ленты.
-     *
-     * @param source      исходный список
-     * @param query       текст
-     * @param activityIds типы
-     * @param tagIds      теги
-     * @param from        дата от
-     * @param to          дата до
-     * @param nearLat     широта
-     * @param nearLng     долгота
-     * @param radiusKm    радиус
-     * @return отфильтрованный список
+     * Если в query пришла NL-строка («найди завтра футбик»), разбирает её правилами
+     * и подставляет activity/from/to/geo; для FTS остаётся только freeText.
      */
+    private ResolvedFilters resolveFilters(
+            String query,
+            List<String> activityIds,
+            List<String> tagIds,
+            Instant from,
+            Instant to,
+            Double nearLat,
+            Double nearLng,
+            Double radiusKm
+    ) {
+        if (query == null || query.isBlank()) {
+            return new ResolvedFilters(null, activityIds, tagIds, from, to, nearLat, nearLng, radiusKm);
+        }
+
+        SearchIntentResponse intent = searchIntentParser.parse(query, nearLat, nearLng);
+
+        List<String> resolvedActivities = (activityIds == null || activityIds.isEmpty())
+                ? intent.activityIds()
+                : activityIds;
+        Instant resolvedFrom = from != null ? from : intent.from();
+        Instant resolvedTo = to != null ? to : intent.to();
+        Double resolvedLat = nearLat;
+        Double resolvedLng = nearLng;
+        Double resolvedRadius = radiusKm;
+        if (resolvedLat == null && intent.near() != null) {
+            resolvedLat = intent.near().lat();
+            resolvedLng = intent.near().lng();
+        }
+        if (resolvedRadius == null) {
+            resolvedRadius = intent.radiusKm();
+        }
+
+        return new ResolvedFilters(
+                intent.freeText(),
+                resolvedActivities,
+                tagIds,
+                resolvedFrom,
+                resolvedTo,
+                resolvedLat,
+                resolvedLng,
+                resolvedRadius
+        );
+    }
+
+    private record ResolvedFilters(
+            String query,
+            List<String> activityIds,
+            List<String> tagIds,
+            Instant from,
+            Instant to,
+            Double nearLat,
+            Double nearLng,
+            Double radiusKm
+    ) {
+    }
+
     private List<EventEntity> filterEvents(
             List<EventEntity> source,
             String query,

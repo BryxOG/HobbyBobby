@@ -31,6 +31,16 @@ X-User-Id: {{userId}}
 GET {{baseUrl}}/events/publish-quote
 X-User-Id: {{userId}}
 
+### NL-парсер v1 (правила)
+POST {{baseUrl}}/events/search/parse
+Content-Type: application/json
+
+{
+  "query": "найди седня или завтра футбик в москоу",
+  "userLat": null,
+  "userLng": null
+}
+
 ### Создать ивент
 POST {{baseUrl}}/events
 X-User-Id: {{userId}}

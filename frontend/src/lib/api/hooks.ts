@@ -30,6 +30,35 @@ import { qk } from "./queryKeys";
 export { qk };
 
 /* --- Events ---------------------------------------------------------------- */
+export function useParseSearch(query: string, active = true) {
+  const userId = useAuth((s) => s.userId);
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: qk.searchParse(trimmed),
+    queryFn: () => api.events.parseSearch({ query: trimmed }),
+    enabled: active && trimmed.length >= 2 && (USING_MOCK_EVENTS || Boolean(userId)),
+    staleTime: 30_000,
+  });
+}
+
+/** Собирает EventListQuery: сырой NL уходит в query — бэкенд сам парсит правила. */
+export function toEventListQuery(
+  activityChips: ActivityId[],
+  rawSearch: string,
+): EventListQuery {
+  const trimmed = rawSearch.trim();
+  if (!trimmed) {
+    return {
+      activityIds: activityChips.length ? activityChips : undefined,
+    };
+  }
+  // Ручные чипы активности имеют приоритет; даты/гео/тип из NL разбирает EventService.
+  return {
+    query: trimmed,
+    activityIds: activityChips.length ? activityChips : undefined,
+  };
+}
+
 export function useEvents(query: EventListQuery = {}, active = true) {
   const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({

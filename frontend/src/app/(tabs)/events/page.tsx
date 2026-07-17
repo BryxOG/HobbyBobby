@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ACTIVITIES } from "@/lib/activities";
-import { useEvents, useMyEventsFeed } from "@/lib/api/hooks";
+import {
+  toEventListQuery,
+  useEvents,
+  useMyEventsFeed,
+  useParseSearch,
+} from "@/lib/api/hooks";
 import { USING_MOCKS } from "@/lib/api/client";
 import type { ActivityId } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
@@ -32,10 +37,18 @@ export default function EventsPage() {
   const [activities, setActivities] = useState<ActivityId[]>([]);
   const query = useDebounced(search);
 
+  const { data: intent } = useParseSearch(query, query.trim().length >= 2);
+
   const filters = useMemo(
-    () => ({ query, activityIds: activities }),
-    [query, activities],
+    () => toEventListQuery(activities, query),
+    [activities, query],
   );
+
+  const interpretationChips = useMemo(() => {
+    if (!intent?.interpretedAs) return [];
+    return [intent.interpretedAs.when, intent.interpretedAs.what, intent.interpretedAs.where]
+      .filter((label): label is string => Boolean(label && label.trim()));
+  }, [intent]);
 
   const allEvents = useEvents(filters, feedMode === "all");
   const myEvents = useMyEventsFeed(filters, feedMode === "mine");
@@ -80,6 +93,17 @@ export default function EventsPage() {
           onChange={setSearch}
           placeholder={ru.events.searchPlaceholder}
         />
+
+        {interpretationChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--muted)]">{ru.events.interpreted}</span>
+            {interpretationChips.map((label) => (
+              <Chip key={label} selected>
+                {label}
+              </Chip>
+            ))}
+          </div>
+        )}
 
         {/* Bleed to the screen edges so the row reads as scrollable. */}
         <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
