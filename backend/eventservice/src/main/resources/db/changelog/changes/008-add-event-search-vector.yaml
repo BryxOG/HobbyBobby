@@ -1,0 +1,180 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-add-event-search-vector
+      author: eventservice
+      comment: Postgres FTS — search_vector, GIN, триггер и словарь синонимов активностей
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE OR REPLACE FUNCTION event_activity_search_text(p_activity_id VARCHAR)
+              RETURNS TEXT
+              LANGUAGE sql
+              IMMUTABLE
+              AS $$
+                SELECT CASE lower(p_activity_id)
+
+                  WHEN 'basketball' THEN
+                    'basketball баскетбол баскет баскетбольный баскетболист '
+                    'стритбол стрит стритбол streetball 3х3 3x3 тринатри '
+                    'кольцо щит площадка площадке дворик оранжевый мяч '
+                    'данк данки слэмбол играть в баскет '
+
+                  WHEN 'football' THEN
+                    'football футбол футбик футбольчик футбольный футболист '
+                    'soccer фут ногомяч 5х5 5x5 7х7 7x7 11х11 11x11 '
+                    'поле газон резина дворовый дворовой пас гол вратарь '
+                    'минифутбол мини-футбол футзали футзал '
+                    'попинать мяч погонять в футбол '
+
+                  WHEN 'volleyball' THEN
+                    'volleyball волейбол волейбольный волейболист '
+                    'пляжный пляжбол пляж сетка подача блок '
+                    'через сетку на песке в зале '
+
+                  WHEN 'boxing' THEN
+                    'boxing бокс боксёр боксер боксёрский боксерский '
+                    'спарринг спарринг партнёр груша мешок ринги перчатки '
+                    'ударка боксировать подраться на ринге '
+                    'кикбоксинг кик мма единоборства '
+
+                  WHEN 'skating' THEN
+                    'skating коньки конёк конек каток лед лёд катание '
+                    'фигурное фигурноекатание хоккейныеконьки '
+                    'вднх катокнавднх покататься на коньках '
+
+                  WHEN 'tennis' THEN
+                    'tennis теннис теннисный теннисист корт ракетка мячик '
+                    'большойтеннис падел паддл парный одиночный '
+                    'ищу пару на теннис сыграть в теннис '
+
+                  WHEN 'cycling' THEN
+                    'cycling велопрогулка велосипед велосипедный вело велик '
+                    'байк байкинг катание набережная парк трейл '
+                    'крутануть покататься на велике велоклуб '
+                    'шоссейный горный mtb '
+
+                  WHEN 'baseball' THEN
+                    'baseball бейсбол бейсбольный бита перчатка мяч поле '
+                    'хоумран бейсболист '
+
+                  WHEN 'bowling' THEN
+                    'bowling боулинг боулить кегли дорожка страйк спар '
+                    'шары боулингклуб послеработы боулинг после работы '
+
+                  WHEN 'karaoke' THEN
+                    'karaoke караоке петь песни песенки микрофон хиты '
+                    'вокал поём поем спеть караокебар караоке-бар '
+                    'девяностые двухтысячные попеть '
+
+                  WHEN 'gaming' THEN
+                    'gaming видеоигры игры гейминг геймер приставки консоль '
+                    'фифа fifa nba2k csgo дота dota valorant '
+                    'пк пкшка xbox playstation ps5 ps4 nintendo свитч '
+                    'стим steam турнир ретро приставки ланлан '
+
+                  WHEN 'art' THEN
+                    'art творчество рисование рисуем рисунок скетчинг скетч '
+                    'живопись гуашь акварель масло пленэр пленэр '
+                    'художка художник краски холст мастеркласс '
+
+                  WHEN 'crafts' THEN
+                    'crafts рукоделие вязание вяжем спицы крючок шитьё шитье '
+                    'хендмейд handmade вышивка бисер макраме '
+                    'рукодельницы творческийвечер '
+
+                  WHEN 'boardgames' THEN
+                    'boardgames настолки настольные игры настолка настольки '
+                    'мафия мафию монополияuno уно алиас имаджинариум '
+                    'днд dnd днд дндшка каркассон колонизаторы '
+                    'настольный клуб поиграть в настолки '
+
+                  WHEN 'coffee' THEN
+                    'coffee кофе кофеёк кофеек кофейку кофейке кофейне кофейня '
+                    'кофеин кофеинчик капучино капуч латте американо эспрессо '
+                    'раф флэт flatwhite матча matcha чайник '
+                    'бахнем бахнуть бахнули выпьем выпить выпьемкофе '
+                    'посидим посидеть сходим встретимся увидимся '
+                    'кофебрейк кофе-брейк кофебрейк перерыв на кофе '
+                    'кофемания знакомоства закофе кофеипоболтать '
+                    'двойнойэспрессо чашечку кофейную '
+
+                  WHEN 'bar' THEN
+                    'bar бар барчик барик пиво пивко пивка пивас крафт '
+                    'коктейли коктейльчик бокалы вино виночка '
+                    'бахнем бахнуть выпьем выпить накатим накатить '
+                    'сходим посидим бархоппинг бархоп пятница '
+                    'паб пабах afterwork послеработы '
+
+                  WHEN 'party' THEN
+                    'party дискотека вечеринка туса тусовка тусанём тусанем '
+                    'танцы танцуем клуб клубиться рейв рейвить '
+                    'движ движуха тусануть потусить диско 2000х '
+                    'хаус техно потанцевать '
+
+                  WHEN 'theatre' THEN
+                    'theatre театр театральный спектакль постановка сцена '
+                    'билеты антракт драма комедия мюзикл опера балет '
+                    'сходить в театр пойти на спектакль '
+
+                  WHEN 'support' THEN
+                    'support группа поддержки поддержка круг доверие '
+                    'общение поговорить выговориться терапия '
+                    'анонимные взаимопомощь ментал mental health '
+                    'безопасноепространство '
+
+                  ELSE coalesce(p_activity_id, '')
+                END;
+              $$;
+
+              CREATE OR REPLACE FUNCTION events_build_search_vector(
+                p_title TEXT,
+                p_description TEXT,
+                p_address TEXT,
+                p_activity_id VARCHAR
+              )
+              RETURNS tsvector
+              LANGUAGE sql
+              IMMUTABLE
+              AS $$
+                SELECT
+                  to_tsvector(
+                    'simple',
+                    coalesce(p_title, '') || ' ' ||
+                    coalesce(p_description, '') || ' ' ||
+                    coalesce(p_address, '') || ' ' ||
+                    event_activity_search_text(p_activity_id)
+                  );
+              $$;
+
+              ALTER TABLE events
+                ADD COLUMN IF NOT EXISTS search_vector tsvector;
+
+              CREATE OR REPLACE FUNCTION events_search_vector_trigger()
+              RETURNS trigger
+              LANGUAGE plpgsql
+              AS $$
+              BEGIN
+                NEW.search_vector := events_build_search_vector(
+                  NEW.title,
+                  NEW.description,
+                  NEW.address,
+                  NEW.activity_id
+                );
+                RETURN NEW;
+              END;
+              $$;
+
+              DROP TRIGGER IF EXISTS trg_events_search_vector ON events;
+              CREATE TRIGGER trg_events_search_vector
+                BEFORE INSERT OR UPDATE OF title, description, address, activity_id
+                ON events
+                FOR EACH ROW
+                EXECUTE FUNCTION events_search_vector_trigger();
+
+              UPDATE events
+              SET search_vector = events_build_search_vector(title, description, address, activity_id);
+
+              CREATE INDEX IF NOT EXISTS idx_events_search_vector
+                ON events
+                USING GIN (search_vector);

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +36,7 @@ import org.javaguru.eventservice.repository.EventParticipantRepository;
 import org.javaguru.eventservice.repository.EventRepository;
 import org.javaguru.eventservice.repository.EventTagRepository;
 import org.javaguru.eventservice.repository.TagRepository;
+import org.javaguru.eventservice.search.FullTextQueryBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -474,12 +476,12 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
+        List<EventEntity> ftsOrdered = applyFullTextSearch(source, query);
         Map<String, List<TagResponse>> tagsByEvent = tagIds != null && !tagIds.isEmpty()
-                ? loadTags(source.stream().map(EventEntity::getId).toList())
+                ? loadTags(ftsOrdered.stream().map(EventEntity::getId).toList())
                 : Map.of();
 
-        return source.stream()
-                .filter(event -> matchesText(event, query))
+        return ftsOrdered.stream()
                 .filter(event -> activityIds == null || activityIds.isEmpty()
                         || activityIds.contains(event.getActivityId()))
                 .filter(event -> tagIds == null || tagIds.isEmpty()
@@ -492,29 +494,38 @@ public class EventService {
     }
 
     /**
-     * Проверяет текстовый поиск по ивенту.
+     * Фильтрует и сортирует ивенты через Postgres FTS ({@code search_vector}).
+     * Без запроса возвращает исходный список без изменений.
      *
-     * @param event сущность
-     * @param query строка поиска
-     * @return true, если подходит
+     * @param source исходный список
+     * @param query  строка поиска
+     * @return отфильтрованный список в порядке релевантности FTS
      */
-    private boolean matchesText(EventEntity event, String query) {
-        if (query == null || query.isBlank()) {
-            return true;
+    private List<EventEntity> applyFullTextSearch(List<EventEntity> source, String query) {
+        String tsQuery = FullTextQueryBuilder.toTsQuery(query);
+        if (tsQuery == null) {
+            return source;
         }
-        String haystack = String.join(" ",
-                event.getTitle(),
-                event.getDescription(),
-                event.getAddress(),
-                event.getActivityId()
-        ).toLowerCase();
-        String[] words = query.trim().toLowerCase().split("\\s+");
-        for (String word : words) {
-            if (!haystack.contains(word)) {
-                return false;
+        if (source.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> rankedIds = eventRepository.findIdsByFullText(tsQuery);
+        if (rankedIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, EventEntity> byId = source.stream()
+                .collect(Collectors.toMap(EventEntity::getId, event -> event, (a, b) -> a, LinkedHashMap::new));
+
+        List<EventEntity> matched = new ArrayList<>();
+        for (String id : rankedIds) {
+            EventEntity event = byId.get(id);
+            if (event != null) {
+                matched.add(event);
             }
         }
-        return true;
+        return matched;
     }
 
     /**

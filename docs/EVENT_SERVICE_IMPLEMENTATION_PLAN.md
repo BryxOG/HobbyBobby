@@ -4,7 +4,7 @@
 **Требования продукта** — в [EVENTS_SERVICE_MVP.md](./EVENTS_SERVICE_MVP.md).  
 **Контракт DTO** — [frontend/src/lib/api/types.ts](../frontend/src/lib/api/types.ts).
 
-*Обновлено: 2026-07-17 (ревью полноты + AI/NL-поиск)*
+*Обновлено: 2026-07-17 (leave организатора + normalize EventItem)*
 
 ---
 
@@ -36,11 +36,13 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 |---|---|---|---|
 | Список ивентов + пагинация (10) | Экран «Ивенты» | `GET /eventservice/api/events` | ✅ |
 | Фильтр по типу активности | Чипы 🏀⚽… | `activityIds` | ✅ |
-| Текстовый поиск | «Поиск по ивентам» | `query` (in-memory, не FTS) | 🟡 |
+| Текстовый поиск | «Поиск по ивентам» | `query` → Postgres FTS (`search_vector`) | ✅ |
 | Фильтр по тегам / дате / гео | — | `tagIds`, `from`, `to`, `nearLat/Lng`, `radiusKm` | ✅ |
 | Детали ивента | Карточка + экран `[id]` | `GET /events/{id}` | ✅ |
 | Создание ивента | Мастер «Создать» | `POST /events` | ✅ |
-| Участвовать / отменить | Кнопки зелёная/красная | `POST /events/{id}/join`, `/leave` | ✅ |
+| Участвовать / выйти | Кнопка «Участвовать» / «Отменить» | `POST /events/{id}/join`, `/leave` | ✅ |
+| Leave организатора | — | запрет `ORGANIZER_CANNOT_LEAVE` | ✅ |
+| Отменить ивент (организатор) | «Отменить ивент» | `POST /events/{id}/cancel` → `CANCELLED` | ✅ |
 | Мои ивенты | «Организую / Участвую» | `GET /events/mine?scope=` | ✅ |
 | Котировка публикации | Экран «50 ₽» | `GET /events/publish-quote` | ✅ |
 | Теги | Чипы на деталях | `GET /eventservice/api/tags` | ✅ |
@@ -53,10 +55,16 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 | Удаление ивента | — | — | ❌ |
 | Платная публикация (реальный платёж) | Оплата 50 ₽ | заглушка `publishQuote` | ❌ |
 | Новостная лента (ранжирование) | — | отдельный `/feed` | ❌ |
-| Postgres FTS (`tsvector`) | — | сейчас `matchesText` в Java | ❌ |
+| Postgres FTS (`tsvector`) | — | `008-add-event-search-vector` + GIN | ✅ |
 | NL / умный поиск | «седня футбик в москоу» | parse → filters | ❌ |
 
 **Правило `isJoined`:** сервер вычисляет по наличию текущего пользователя в `participants` — не хранить отдельным флагом.
+
+**Leave vs cancel:**
+- `leave` — участник выходит из ивента; организатору запрещено (`ORGANIZER_CANNOT_LEAVE`).
+- `cancel` — организатор отменяет проведение; `status=CANCELLED`, `cancelledAt` задаётся.
+
+**Нормализация DTO на фронте:** `normalizeEvent` в `http/events.ts` подставляет дефолты (`tags`/`participants`/`rating`/`cancelledAt`/`status`), если бэк опустил поля из‑за `JsonInclude.NON_NULL`.
 
 ### 2.2 UserService (`backend/userservice`)
 
@@ -83,7 +91,7 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 | HTTP-клиенты events/users/chats | ✅ |
 | Переключение моков через env | ✅ |
 | `X-User-Id` через `stores/auth` | ✅ |
-| Полный E2E без моков | 🟡 |
+| Полный E2E без моков | 🟡 API OK; UI — ручной прогон в браузере |
 
 ### 2.5 Инфраструктура
 
@@ -104,6 +112,7 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 [Все] [🏀 Баскетбол] …    →  GET /events?activityIds=basketball,...
 Карточка 3/5, автор, ⭐    →  EventResponse (participants, organizer, rating)
 [Участвовать] / [Отменить] →  isJoined + POST join/leave
+                              (leave организатору запрещён)
 ```
 
 ### Экран деталей
@@ -113,6 +122,7 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 Дата, 📍 место            →  startsAt, endsAt, location
 Организатор LVL ⭐        →  organizer (UserSummary из UserService)
 Участники 3/4             →  participants[], capacity
+Отменить ивент            →  POST /events/{id}/cancel (только организатор)
 ```
 
 Базовый URL: `http://localhost:9011/eventservice/api`  
@@ -165,17 +175,18 @@ UserService хранит пользователей отдельно в БД `us
 - [x] Kafka producer
 - [x] realtime-service WebSocket
 
-### Фаза 4 — Фронт ↔ бэк 🟡 (текущая)
+### Фаза 4 — Фронт ↔ бэк ✅ (API)
 
 - [x] `httpEventsClient`, `httpUsersClient`, `httpChatsClient`
-- [ ] E2E-проверка всех экранов на живом API
-- [ ] Выравнивание DTO (если есть расхождения полей)
-- [ ] Документировать `.env.local` для команды
+- [x] Живой API: list/get/mine, join/leave, create, cancel, tags, pins, chats
+- [x] `normalizeEvent` — дефолты для NON_NULL полей бэка
+- [x] Leave организатора запрещён; отмена проведения — через `cancel`
+- [ ] Ручной прогон UI в браузере (`npm run dev`, логин тестовым юзером)
 
 ### Фаза 5 — Доработки MVP
 
-- [ ] Редактирование / удаление ивента (организатор)
-- [ ] Postgres FTS вместо in-memory `matchesText` (база для NL-поиска)
+- [ ] Редактирование ивента (организатор); удаление при необходимости
+- [x] Postgres FTS вместо in-memory `matchesText` (база для NL-поиска)
 - [ ] Новостная лента `/feed` (подписки + теги + гео)
 - [ ] JWT + Gateway / Keycloak вместо `X-User-Id`
 - [ ] Реальная оплата публикации
@@ -240,6 +251,78 @@ NEXT_PUBLIC_USE_MOCK_CHATS=false
 NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
 ```
 
+### Postgres FTS — как устроено и как проверить
+
+**Миграция:** один changeset `008-add-event-search-vector.yaml`:
+
+- колонка `events.search_vector` (`tsvector`)
+- GIN-индекс `idx_events_search_vector`
+- триггер на INSERT/UPDATE `title`, `description`, `address`, `activity_id`
+- словарь синонимов/сленга активностей (`event_activity_search_text`: «футбик» → football, «кофейку бахнем» → coffee, …)
+
+**Код:** `FullTextQueryBuilder` → `слово:* & слово:*`; `EventRepository.findIdsByFullText`; `EventService.applyFullTextSearch`.
+
+#### Проверка
+
+1. Поднять Postgres + EventService (`docker compose up -d`, затем `cd eventservice && ./gradlew bootRun`).
+2. В логе старта — успешное применение `008-add-event-search-vector` (без checksum / SQL ошибок).
+3. Если раньше локально гоняли черновые 009/010 и Liquibase ругается — сброс volume:
+
+```bash
+cd backend
+docker compose down -v
+docker compose up -d
+cd eventservice && ./gradlew bootRun
+./scripts/seed-events.sh   # при необходимости
+```
+
+4. **UI:** `http://localhost:3000/events` (моки выкл.) — строка поиска:
+
+| Запрос | Ожидание |
+|---|---|
+| `футбол` / `футбик` | ивенты football |
+| `кофейку бахнем` | ивенты coffee |
+| `настолки` | boardgames |
+| `парк` | совпадение в title/address/description |
+| `абракадабраxyz` | пустой список |
+
+5. **REST:**
+
+```http
+GET http://localhost:9011/eventservice/api/events?query=кофейку%20бахнем
+X-User-Id: 1
+
+GET http://localhost:9011/eventservice/api/events?query=футбик
+X-User-Id: 1
+```
+
+6. **SQL** (порт Postgres на хосте — **5433**):
+
+```bash
+docker exec -it hobbybobby-postgres psql -U hobbybobby -d eventservice
+```
+
+```sql
+\d events
+
+SELECT id, title, activity_id
+FROM events
+WHERE search_vector @@ to_tsquery('simple', 'кофейку:* & бахнем:*');
+
+SELECT id, title, activity_id
+FROM events
+WHERE search_vector @@ to_tsquery('simple', 'футбик:*');
+```
+
+#### Чеклист
+
+- [ ] EventService стартовал без ошибки Liquibase по `008`
+- [ ] `query=футбик` что-то находит
+- [ ] `query=кофейку бахнем` находит coffee
+- [ ] мусорный запрос — пустой `items`
+
+**Не путать с NL-парсером (§11):** FTS ищет слова в индексе (включая сленг активностей). Даты («завтра») и гео («в москве») FTS сам не выставляет — для этого нужен intent-parser.
+
 ---
 
 ## 7. Kafka-события
@@ -256,7 +339,7 @@ NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
 
 | # | Вопрос | Рекомендация на сейчас |
 |---|---|---|
-| 1 | FTS: Postgres vs Elasticsearch | Postgres `tsvector` в фазе 5 |
+| 1 | FTS: Postgres vs Elasticsearch | ✅ Сделано: Postgres `tsvector` + GIN (`008`) |
 | 2 | Рейтинг / LVL в карточке | Читать из UserService; рейтинг ивента = организатора |
 | 3 | Платная публикация 50 ₽ | `publishQuote` — заглушка до платёжки |
 | 4 | Формула ленты | Отложить до фазы 5 |
@@ -272,8 +355,8 @@ NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
 
 | Пробел | Почему важно | Куда |
 |---|---|---|
-| NL / «умный» поиск | Сейчас `query` — подстрока; «седня футбик в москоу» не сработает | §11, фазы 5–6 |
-| Поиск не в SQL | `matchesText` грузит все ивенты в память — не масштабируется | FTS в фазе 5 |
+| NL / «умный» поиск | FTS закрывает сленг активностей; «седня/москоу» ещё нет | §11, фазы 5–6 |
+| Поиск не в SQL | ✅ Закрыто: `search_vector` + GIN | §6 FTS |
 | Edit/delete ивента | В MVP спеке есть, в API нет | фаза 5 |
 | Редактирование сообщений чата | В MVP есть, в API только send | бэклог чата |
 | Геокодинг при создании | Адрес текстом, пин часто «центр Москвы» | фаза 5–6 |
@@ -287,12 +370,11 @@ NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
 
 ## 10. Следующие задачи (приоритет)
 
-1. **E2E:** фронт на `NEXT_PUBLIC_USE_MOCK_*=false` — список, детали, join/leave, создать ивент.
-2. **PUT/PATCH/DELETE** ивента — только организатор.
-3. **FTS** — `search_vector` + GIN; синонимы активностей в индекс.
-4. **NL-поиск v1** — `POST /events/search/parse` → структурированные фильтры (§11.3).
-5. **JWT** — gateway + убрать `X-User-Id` с фронта.
-6. **CI** — сборка `eventservice` + `userservice` в pipeline.
+1. **UI E2E:** `cd frontend && npm run dev` — список / детали / join / create / cancel ивента.
+2. **NL-поиск v1** — `POST /events/search/parse` → структурированные фильтры (§11.3).
+3. **Edit ивента** — только организатор (cancel уже есть).
+4. **JWT** — gateway + убрать `X-User-Id` с фронта.
+5. **CI** — сборка `eventservice` + `userservice` в pipeline.
 
 ---
 
