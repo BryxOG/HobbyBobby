@@ -45,15 +45,48 @@ function toSearchParams(query: EventListQuery = {}): string {
   return qs ? `?${qs}` : "";
 }
 
+/**
+ * Дополняет поля, которые бэкенд может опустить из‑за JsonInclude.NON_NULL.
+ *
+ * @param event сырой ответ EventService
+ * @returns EventItem с дефолтами контракта фронта
+ */
+function normalizeEvent(event: EventItem): EventItem {
+  return {
+    ...event,
+    tags: event.tags ?? [],
+    participants: event.participants ?? [],
+    rating: event.rating ?? null,
+    status: event.status ?? "ACTIVE",
+    cancelledAt: event.cancelledAt ?? null,
+  };
+}
+
+/**
+ * Нормализует страницу ивентов.
+ *
+ * @param page ответ с cursor-пагинацией
+ * @returns страница с нормализованными items
+ */
+function normalizePage(page: Page<EventItem>): Page<EventItem> {
+  return {
+    ...page,
+    items: page.items.map(normalizeEvent),
+  };
+}
+
 /** HTTP-реализация events/map/tags части ApiClient. */
 export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
   events: {
     async list(query: EventListQuery = {}): Promise<Page<EventItem>> {
-      return eventRequest<Page<EventItem>>(`/events${toSearchParams(query)}`);
+      const page = await eventRequest<Page<EventItem>>(
+        `/events${toSearchParams(query)}`,
+      );
+      return normalizePage(page);
     },
 
     async get(id: string): Promise<EventItem> {
-      return eventRequest<EventItem>(`/events/${id}`);
+      return normalizeEvent(await eventRequest<EventItem>(`/events/${id}`));
     },
 
     async mine(
@@ -63,22 +96,31 @@ export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
       const params = new URLSearchParams(toSearchParams(query).replace(/^\?/, ""));
       params.set("scope", scope);
       const qs = params.toString();
-      return eventRequest<Page<EventItem>>(`/events/mine?${qs}`);
+      const page = await eventRequest<Page<EventItem>>(`/events/mine?${qs}`);
+      return normalizePage(page);
     },
 
     async create(input: CreateEventInput): Promise<EventItem> {
-      return eventRequest<EventItem>("/events", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
+      return normalizeEvent(
+        await eventRequest<EventItem>("/events", {
+          method: "POST",
+          body: JSON.stringify(input),
+        }),
+      );
     },
 
     async join(id: string): Promise<EventItem> {
-      return eventRequest<EventItem>(`/events/${id}/join`, { method: "POST" });
+      return normalizeEvent(
+        await eventRequest<EventItem>(`/events/${id}/join`, { method: "POST" }),
+      );
     },
 
     async leave(id: string): Promise<EventItem> {
-      return eventRequest<EventItem>(`/events/${id}/leave`, { method: "POST" });
+      return normalizeEvent(
+        await eventRequest<EventItem>(`/events/${id}/leave`, {
+          method: "POST",
+        }),
+      );
     },
 
     async publishQuote(): Promise<PublishQuote> {
@@ -86,7 +128,11 @@ export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
     },
 
     async cancel(id: string): Promise<EventItem> {
-      return eventRequest<EventItem>(`/events/${id}/cancel`, { method: "POST" });
+      return normalizeEvent(
+        await eventRequest<EventItem>(`/events/${id}/cancel`, {
+          method: "POST",
+        }),
+      );
     },
   },
 
