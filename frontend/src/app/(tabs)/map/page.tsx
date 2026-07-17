@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { ACTIVITIES } from "@/lib/activities";
 import { usePins } from "@/lib/api/hooks";
@@ -29,10 +29,10 @@ export default function MapPage() {
 }
 
 function MapScreen() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const focusId = searchParams.get("focus");
 
-  const theme = useSettings((s) => s.theme);
   const geoEnabled = useSettings((s) => s.geolocation);
 
   const [activities, setActivities] = useState<ActivityId[]>([]);
@@ -70,8 +70,10 @@ function MapScreen() {
       <div className="absolute inset-0">
         <EventMap
           pins={pins ?? []}
-          theme={theme}
-          onSelect={setSelectedId}
+          onSelect={(id) => {
+            setSelectedId(id);
+            router.push(`/events/${id}`);
+          }}
           selectedId={selectedId}
           focus={focusPin?.location ?? null}
           me={me}

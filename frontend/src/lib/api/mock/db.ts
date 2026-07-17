@@ -186,6 +186,8 @@ function buildEvents(): EventItem[] {
         ),
         isJoined: false, // Derived from `participants` once fixtures settle.
         rating: organizer.rating,
+        status: "ACTIVE",
+        cancelledAt: null,
       });
     }
   }

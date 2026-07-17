@@ -3,7 +3,7 @@ import { getAuthUserId } from "@/lib/stores/auth";
 /** Базовый URL EventService без завершающего слеша. */
 export const EVENT_API_BASE =
   process.env.NEXT_PUBLIC_EVENT_API_URL ??
-  "http://localhost:9001/eventservice/api";
+  "http://localhost:9011/eventservice/api";
 
 /**
  * Выполняет авторизованный HTTP-запрос к EventService.

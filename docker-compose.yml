@@ -1,0 +1,144 @@
+# Полный стек HobbyBobby: инфраструктура + backend + frontend.
+# notification-service намеренно не включён.
+#
+# Запуск:
+#   cp backend/.env.example backend/.env   # при необходимости
+#   docker compose up --build
+#
+# Фронт: http://localhost:3000
+# EventService: http://localhost:9001/eventservice/api
+# UserService:  http://localhost:9002/userservice/api
+# WebSocket:    ws://localhost:9003/ws
+#
+# Postgres на хосте: localhost:5433 (внутри сети Docker — postgres:5432)
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hobbybobby-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hobbybobby}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hobbybobby}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hobbybobby}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: hobbybobby-kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:9094
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  userservice:
+    build:
+      context: ./backend
+      dockerfile: userservice/Dockerfile
+    container_name: hobbybobby-userservice
+    ports:
+      - "9002:9002"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/userservice
+      DB_USERNAME: ${DB_USERNAME:-hobbybobby}
+      DB_PASSWORD: ${DB_PASSWORD:-hobbybobby}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  eventservice:
+    build:
+      context: ./backend
+      dockerfile: eventservice/Dockerfile
+    container_name: hobbybobby-eventservice
+    ports:
+      - "9001:9001"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eventservice
+      DB_USERNAME: ${DB_USERNAME:-hobbybobby}
+      DB_PASSWORD: ${DB_PASSWORD:-hobbybobby}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      USER_SERVICE_BASE_URL: http://userservice:9002/userservice/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      userservice:
+        condition: service_started
+    restart: unless-stopped
+
+  realtime-service:
+    build:
+      context: ./backend
+      dockerfile: realtime-service/Dockerfile
+    container_name: hobbybobby-realtime-service
+    ports:
+      - "9003:9003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      eventservice:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_USE_MOCK_USERS: "false"
+        NEXT_PUBLIC_USE_MOCK_EVENTS: "false"
+        NEXT_PUBLIC_USE_MOCK_CHATS: "false"
+        NEXT_PUBLIC_EVENT_API_URL: http://localhost:9001/eventservice/api
+        NEXT_PUBLIC_USER_API_URL: http://localhost:9002/userservice/api
+        NEXT_PUBLIC_REALTIME_WS_URL: ws://localhost:9003
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${NEXT_PUBLIC_YANDEX_MAPS_API_KEY}
+    container_name: hobbybobby-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - eventservice
+      - userservice
+      - realtime-service
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  kafka_data:

@@ -2,12 +2,15 @@
 
 import { ru } from "@/lib/i18n/ru";
 import { useSettings } from "@/lib/stores/settings";
+import { useAuth } from "@/lib/stores/auth";
+import { disableWebPush, enableWebPush } from "@/lib/push/fcm";
 import { Header } from "@/components/ui/Header";
 import { ListGroup, ListRow } from "@/components/ui/List";
 import { Toggle } from "@/components/ui/Toggle";
 import { InstallRow } from "@/components/pwa/InstallRow";
 
 export default function SettingsPage() {
+  const userId = useAuth((s) => s.userId);
   const {
     notifications,
     geolocation,
@@ -16,6 +19,20 @@ export default function SettingsPage() {
     setGeolocation,
     toggleTheme,
   } = useSettings();
+
+  const handleNotifications = async (on: boolean) => {
+    setNotifications(on);
+    if (!userId) return;
+    try {
+      if (on) {
+        await enableWebPush(userId);
+      } else {
+        await disableWebPush(userId);
+      }
+    } catch (error) {
+      console.error("Не удалось настроить push-уведомления", error);
+    }
+  };
 
   return (
     <>
@@ -30,7 +47,7 @@ export default function SettingsPage() {
             trailing={
               <Toggle
                 checked={notifications}
-                onChange={setNotifications}
+                onChange={handleNotifications}
                 label={ru.settings.notifications}
               />
             }
@@ -63,7 +80,6 @@ export default function SettingsPage() {
               />
             }
           />
-          {/* Only RU exists today; the row is live so adding a locale is visible. */}
           <ListRow icon="🌐" label={ru.settings.language} value="RU" />
         </ListGroup>
 

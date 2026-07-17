@@ -156,6 +156,14 @@ public class EventController {
      * @param currentUserId организатор
      * @return созданный ивент
      */
+    @PostMapping("/{eventId}/cancel")
+    public EventResponse cancel(
+            @PathVariable String eventId,
+            @RequestHeader("X-User-Id") Long currentUserId
+    ) {
+        return eventService.cancel(eventId, currentUserId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EventResponse create(

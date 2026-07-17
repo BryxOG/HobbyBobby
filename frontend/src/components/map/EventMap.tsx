@@ -1,16 +1,19 @@
 "use client";
 
-import maplibregl, { Map as MapLibreMap, Marker } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getActivity } from "@/lib/activities";
 import type { EventPin, GeoPoint } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
-import "maplibre-gl/dist/maplibre-gl.css";
-import { DEFAULT_ZOOM, MOSCOW_CENTER, osmStyle } from "./mapStyle";
+import { DEFAULT_ZOOM, FALLBACK_CENTER } from "./mapStyle";
+import {
+  detectBrowserCenter,
+  loadYandexMapsApi,
+  setMapLocation,
+  type YMaps3Api,
+} from "./yandexMaps";
 
 interface Props {
   pins: EventPin[];
-  theme: "light" | "dark";
   onSelect: (id: string) => void;
   selectedId?: string | null;
   /** Pans here once when set — used by "Смотреть карту" after publishing. */
@@ -24,16 +27,19 @@ interface Props {
  */
 export function EventMap({
   pins,
-  theme,
   onSelect,
   selectedId,
   focus,
   me,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const markersRef = useRef(new Map<string, Marker>());
-  const meMarkerRef = useRef<Marker | null>(null);
+  const ymapsRef = useRef<YMaps3Api | null>(null);
+  const mapRef = useRef<InstanceType<YMaps3Api["YMap"]> | null>(null);
+  const markersRef = useRef(new Map<string, unknown>());
+  const markerElementsRef = useRef(new Map<string, HTMLButtonElement>());
+  const meMarkerRef = useRef<unknown | null>(null);
+  const [mapReady, setMapReady] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Markers are wired up once, but must call the latest handler — keep it in a
   // ref, updated after commit rather than during render.
@@ -45,41 +51,67 @@ export function EventMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: osmStyle(theme),
-      center: MOSCOW_CENTER,
-      zoom: DEFAULT_ZOOM,
-      attributionControl: { compact: true },
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    mapRef.current = map;
+    let isMounted = true;
+    void loadYandexMapsApi()
+      .then(async (ymaps3) => {
+        await ymaps3.ready;
+        if (!isMounted || !containerRef.current) return;
 
-    const markers = markersRef.current; // Capture for cleanup.
+        ymapsRef.current = ymaps3;
+        const browserCenter = await detectBrowserCenter();
+        const center: [number, number] = focus
+          ? [focus.lng, focus.lat]
+          : me
+            ? [me.lng, me.lat]
+            : browserCenter ?? FALLBACK_CENTER;
+        const map = new ymaps3.YMap(containerRef.current, {
+          location: { center, zoom: focus ? 14 : DEFAULT_ZOOM },
+          behaviors: ["drag", "scrollZoom", "pinchZoom", "dblClick"],
+        });
+        map.addChild(new ymaps3.YMapDefaultSchemeLayer({}));
+        map.addChild(new ymaps3.YMapDefaultFeaturesLayer({}));
+        mapRef.current = map;
+        setLoadError(null);
+        setMapReady((value) => value + 1);
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error
+            ? error.message
+            : ru.map.loadError;
+        setLoadError(message);
+      });
+
+    const markers = markersRef.current;
+    const markerElements = markerElementsRef.current;
     return () => {
-      map.remove();
+      isMounted = false;
+      for (const marker of markers.values()) {
+        mapRef.current?.removeChild?.(marker);
+      }
+      mapRef.current?.destroy?.();
       mapRef.current = null;
       markers.clear();
+      markerElements.clear();
+      meMarkerRef.current = null;
+      ymapsRef.current = null;
     };
-    // Theme is handled by the effect below; re-running here would drop the map.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    mapRef.current?.setStyle(osmStyle(theme));
-  }, [theme]);
+  }, [focus, me]);
 
   // Diff markers: add new pins, drop stale ones, leave the rest untouched.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const ymaps3 = ymapsRef.current;
+    if (!map || !ymaps3) return;
 
     const next = new Set(pins.map((p) => p.id));
 
-    for (const [id, marker] of markersRef.current) {
+    for (const [id, marker] of Array.from(markersRef.current.entries())) {
       if (!next.has(id)) {
-        marker.remove();
+        map.removeChild?.(marker);
         markersRef.current.delete(id);
+        markerElementsRef.current.delete(id);
       }
     }
 
@@ -96,34 +128,40 @@ export function EventMap({
         onSelectRef.current(pin.id);
       });
 
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([pin.location.lng, pin.location.lat])
-        .addTo(map);
+      const marker = new ymaps3.YMapMarker(
+        { coordinates: [pin.location.lng, pin.location.lat] },
+        el,
+      );
+      map.addChild(marker);
       markersRef.current.set(pin.id, marker);
+      markerElementsRef.current.set(pin.id, el);
     }
-  }, [pins]);
+  }, [pins, mapReady]);
 
   useEffect(() => {
-    for (const [id, marker] of markersRef.current) {
-      marker.getElement().classList.toggle("hb-pin--active", id === selectedId);
+    for (const [id, element] of markerElementsRef.current) {
+      element?.classList.toggle("hb-pin--active", id === selectedId);
     }
-  }, [selectedId, pins]);
+  }, [selectedId, pins, mapReady]);
 
   useEffect(() => {
     if (!focus || !mapRef.current) return;
-    mapRef.current.flyTo({
+    setMapLocation(mapRef.current, {
       center: [focus.lng, focus.lat],
       zoom: 14,
       duration: 800,
     });
-  }, [focus]);
+  }, [focus, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const ymaps3 = ymapsRef.current;
+    if (!map || !ymaps3) return;
 
     if (!me) {
-      meMarkerRef.current?.remove();
+      if (meMarkerRef.current) {
+        map.removeChild?.(meMarkerRef.current);
+      }
       meMarkerRef.current = null;
       return;
     }
@@ -132,10 +170,38 @@ export function EventMap({
       const el = document.createElement("div");
       el.className = "hb-me";
       el.setAttribute("aria-label", ru.map.locate);
-      meMarkerRef.current = new maplibregl.Marker({ element: el }).addTo(map);
+      meMarkerRef.current = new ymaps3.YMapMarker(
+        { coordinates: [me.lng, me.lat] },
+        el,
+      );
+      map.addChild(meMarkerRef.current);
+      return;
     }
-    meMarkerRef.current.setLngLat([me.lng, me.lat]);
-  }, [me]);
+    map.removeChild?.(meMarkerRef.current);
+    const el = document.createElement("div");
+    el.className = "hb-me";
+    el.setAttribute("aria-label", ru.map.locate);
+    meMarkerRef.current = new ymaps3.YMapMarker(
+      { coordinates: [me.lng, me.lat] },
+      el,
+    );
+    map.addChild(meMarkerRef.current);
+  }, [me, mapReady]);
+
+  if (loadError) {
+    return (
+      <div className="grid size-full place-items-center bg-surface p-4 text-center">
+        <div className="space-y-2">
+          <p className="text-[15px] font-semibold">{ru.map.loadError}</p>
+          <p className="text-[13px] text-fg-muted">
+            {loadError.includes("NEXT_PUBLIC_YANDEX_MAPS_API_KEY")
+              ? ru.map.noApiKey
+              : loadError}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return <div ref={containerRef} className="size-full" />;
 }

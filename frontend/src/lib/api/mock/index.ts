@@ -145,6 +145,8 @@ export const mockClient: ApiClient = {
           .filter((t): t is NonNullable<typeof t> => Boolean(t)),
         isJoined: true,
         rating: me.rating,
+        status: "ACTIVE",
+        cancelledAt: null,
       };
       db.events.push(event);
       db.profile.counts.events += 1;
@@ -176,6 +178,13 @@ export const mockClient: ApiClient = {
         currency: "RUB",
         label: ru.create.publishOnce,
       });
+    },
+
+    async cancel(id) {
+      const event = findEvent(id);
+      event.status = "CANCELLED";
+      event.cancelledAt = new Date().toISOString();
+      return latency(clone(event));
     },
   },
 

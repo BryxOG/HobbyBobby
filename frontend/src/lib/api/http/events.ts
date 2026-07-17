@@ -84,6 +84,10 @@ export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
     async publishQuote(): Promise<PublishQuote> {
       return eventRequest<PublishQuote>("/events/publish-quote");
     },
+
+    async cancel(id: string): Promise<EventItem> {
+      return eventRequest<EventItem>(`/events/${id}/cancel`, { method: "POST" });
+    },
   },
 
   map: {

@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:9004/notificationservice/api
+
+### Регистрация FCM-токена
+POST {{baseUrl}}/devices
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "fcmToken": "test-fcm-token",
+  "platform": "WEB"
+}
+
+### Удаление FCM-токена
+DELETE {{baseUrl}}/devices
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "fcmToken": "test-fcm-token"
+}

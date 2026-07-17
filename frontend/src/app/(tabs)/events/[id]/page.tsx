@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { use } from "react";
-import { useEvent } from "@/lib/api/hooks";
+import { useCancelEvent, useEvent } from "@/lib/api/hooks";
 import { useSyncChatMembership } from "@/lib/api/hooks/useSyncChatMembership";
 import { formatEventRange } from "@/lib/format";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { ActivityIcon } from "@/components/events/ActivityIcon";
 import { JoinButton } from "@/components/events/JoinButton";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Header } from "@/components/ui/Header";
 import { ErrorState, Skeleton } from "@/components/ui/States";
@@ -19,7 +21,9 @@ export default function EventDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const userId = useAuth((s) => s.userId);
   const { data: event, isPending, isError, refetch } = useEvent(id);
+  const cancelEvent = useCancelEvent();
   useSyncChatMembership(id, event?.isJoined);
 
   if (isError) {
@@ -46,12 +50,21 @@ export default function EventDetailPage({
   }
 
   const taken = event.participants.length;
+  const isOrganizer = userId != null && event.organizer.id === userId;
+  const isCancelled = event.status === "CANCELLED";
 
   return (
     <>
       <Header title={event.title} back />
 
       <main className="flex-1 space-y-6 px-4 py-4 pb-28">
+        {isCancelled && (
+          <section className="rounded-card border border-danger/30 bg-danger/10 px-4 py-3">
+            <p className="text-[15px] font-semibold text-danger">{ru.events.cancelled}</p>
+            <p className="text-[13px] text-fg-muted">{ru.events.cancelledHint}</p>
+          </section>
+        )}
+
         <section className="flex items-start gap-3">
           <ActivityIcon id={event.activityId} size="lg" />
           <div className="min-w-0 flex-1">
@@ -91,7 +104,6 @@ export default function EventDetailPage({
           <p className="text-[15px] text-fg-muted">📍 {event.location.address}</p>
         </section>
 
-        {/* Organizer card — name, LVL, rating, per the sketch. */}
         <section className="rounded-card bg-surface p-3">
           <h2 className="pb-2 text-[13px] font-medium tracking-wide text-fg-muted uppercase">
             {ru.events.createdBy}
@@ -135,7 +147,18 @@ export default function EventDetailPage({
           </ul>
         </section>
 
-        {event.isJoined && (
+        {isOrganizer && !isCancelled && (
+          <Button
+            variant="danger"
+            fullWidth
+            loading={cancelEvent.isPending}
+            onClick={() => cancelEvent.mutate(event.id)}
+          >
+            {ru.events.cancelEvent}
+          </Button>
+        )}
+
+        {event.isJoined && !isCancelled && (
           <Link
             href={`/chats/${event.id}`}
             className="flex items-center justify-center gap-2 rounded-card bg-surface py-3 text-[15px] font-semibold text-primary active:bg-elevated"
@@ -145,10 +168,11 @@ export default function EventDetailPage({
         )}
       </main>
 
-      {/* Sticky action rail so the primary CTA survives a long description. */}
-      <div className="sticky bottom-0 border-t border-border bg-bg/85 px-4 py-3 backdrop-blur-xl">
-        <JoinButton event={event} size="lg" fullWidth />
-      </div>
+      {!isCancelled && (
+        <div className="sticky bottom-0 border-t border-border bg-bg/85 px-4 py-3 backdrop-blur-xl">
+          <JoinButton event={event} size="lg" fullWidth />
+        </div>
+      )}
     </>
   );
 }

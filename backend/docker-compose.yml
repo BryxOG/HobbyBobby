@@ -1,3 +1,5 @@
+# Только инфраструктура для локальной разработки (Gradle bootRun).
+# Полный стек с backend и frontend: docker compose -f ../docker-compose.yml up
 services:
   kafka:
     image: apache/kafka:3.9.0
@@ -30,7 +32,8 @@ services:
     image: postgres:17-alpine
     container_name: hobbybobby-postgres
     ports:
-      - "5432:5432"
+      # 5433 на хосте — конфликт с локальным postgres.exe на Windows (5432)
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hobbybobby}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hobbybobby}

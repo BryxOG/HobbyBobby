@@ -2,7 +2,7 @@ spring:
   application:
     name: eventservice
   datasource:
-    url: jdbc:postgresql://localhost:5432/eventservice
+    url: jdbc:postgresql://localhost:5433/eventservice
     username: ${DB_USERNAME:hobbybobby}
     password: ${DB_PASSWORD:hobbybobby}
   jpa:
@@ -24,6 +24,9 @@ app:
     base-url: ${USER_SERVICE_BASE_URL:http://localhost:9002/userservice/api}
   chat:
     kafka-topic: chat.message.created
+  notification:
+    reminder-topic: event.reminder.due
+    cancelled-topic: event.cancelled
 
 server:
-  port: 9001
+  port: ${SERVER_PORT:9011}

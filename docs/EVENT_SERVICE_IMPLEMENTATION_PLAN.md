@@ -1,0 +1,448 @@
+# Event Service — план реализации
+
+Рабочий план разработки бэкенда и подключения фронта.  
+**Требования продукта** — в [EVENTS_SERVICE_MVP.md](./EVENTS_SERVICE_MVP.md).  
+**Контракт DTO** — [frontend/src/lib/api/types.ts](../frontend/src/lib/api/types.ts).
+
+*Обновлено: 2026-07-17 (ревью полноты + AI/NL-поиск)*
+
+---
+
+## 1. Архитектура монорепо
+
+```
+backend/
+  eventservice/       — ивенты, теги, карта, чат, Kafka producer     :9011
+  userservice/        — пользователи, интересы                        :9002
+  realtime-service/   — WebSocket push (Kafka consumer)               :9003
+  chat-contract/      — общие Kafka DTO (composite build)
+  docker-compose.yml  — Postgres :5433, Kafka :9092
+  postgres/init/      — CREATE DATABASE eventservice, userservice
+
+frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
+```
+
+Стек: **Java 25**, **Spring Boot 4.1**, **Gradle 9.5.1**, **Postgres 17**, **Liquibase**, **Kafka**.
+
+Аутентификация на MVP-этапе: заголовок **`X-User-Id`** (до JWT/Keycloak).
+
+---
+
+## 2. Статус реализации
+
+### 2.1 EventService (`backend/eventservice`)
+
+| Функция | UI (эскиз) | API | Статус |
+|---|---|---|---|
+| Список ивентов + пагинация (10) | Экран «Ивенты» | `GET /eventservice/api/events` | ✅ |
+| Фильтр по типу активности | Чипы 🏀⚽… | `activityIds` | ✅ |
+| Текстовый поиск | «Поиск по ивентам» | `query` (in-memory, не FTS) | 🟡 |
+| Фильтр по тегам / дате / гео | — | `tagIds`, `from`, `to`, `nearLat/Lng`, `radiusKm` | ✅ |
+| Детали ивента | Карточка + экран `[id]` | `GET /events/{id}` | ✅ |
+| Создание ивента | Мастер «Создать» | `POST /events` | ✅ |
+| Участвовать / отменить | Кнопки зелёная/красная | `POST /events/{id}/join`, `/leave` | ✅ |
+| Мои ивенты | «Организую / Участвую» | `GET /events/mine?scope=` | ✅ |
+| Котировка публикации | Экран «50 ₽» | `GET /events/publish-quote` | ✅ |
+| Теги | Чипы на деталях | `GET /eventservice/api/tags` | ✅ |
+| Пины карты | Таб «Карта» | `GET /eventservice/api/map/pins` | ✅ |
+| Чат: список | Таб «Чаты» | `GET /eventservice/api/chats` | ✅ |
+| Чат: сообщения / отправка | Экран чата | `GET/POST .../chats/{eventId}/messages` | ✅ |
+| Kafka → realtime push | WS в чате | `ChatMessageProducer` | ✅ |
+| Обогащение author/participants | «Создал(а): Рома», LVL | `UserServiceClient` batch | ✅ |
+| Редактирование ивента | — | — | ❌ |
+| Удаление ивента | — | — | ❌ |
+| Платная публикация (реальный платёж) | Оплата 50 ₽ | заглушка `publishQuote` | ❌ |
+| Новостная лента (ранжирование) | — | отдельный `/feed` | ❌ |
+| Postgres FTS (`tsvector`) | — | сейчас `matchesText` в Java | ❌ |
+| NL / умный поиск | «седня футбик в москоу» | parse → filters | ❌ |
+
+**Правило `isJoined`:** сервер вычисляет по наличию текущего пользователя в `participants` — не хранить отдельным флагом.
+
+### 2.2 UserService (`backend/userservice`)
+
+| Функция | Статус |
+|---|---|
+| CRUD пользователей | ✅ |
+| Поиск по email | ✅ |
+| Batch `findByIds` (для EventService) | ✅ |
+| Интересы пользователя | ✅ |
+| JWT / OAuth / Keycloak | ❌ |
+
+### 2.3 Realtime Service (`backend/realtime-service`)
+
+| Функция | Статус |
+|---|---|
+| Kafka consumer `chat.message.created` | ✅ |
+| WebSocket push участникам | ✅ |
+
+### 2.4 Frontend
+
+| Функция | Статус |
+|---|---|
+| UI по эскизу (5 табов, моки) | ✅ |
+| HTTP-клиенты events/users/chats | ✅ |
+| Переключение моков через env | ✅ |
+| `X-User-Id` через `stores/auth` | ✅ |
+| Полный E2E без моков | 🟡 |
+
+### 2.5 Инфраструктура
+
+| Компонент | Статус |
+|---|---|
+| Docker Compose: Postgres + Kafka | ✅ |
+| NotificationService | ❌ |
+| API Gateway / Keycloak в репо | ❌ (локальные черновики вне git) |
+
+---
+
+## 3. Соответствие UI → API
+
+### Экран «Ивенты» (список)
+
+```
+Поиск по ивентам          →  GET /events?query=...
+[Все] [🏀 Баскетбол] …    →  GET /events?activityIds=basketball,...
+Карточка 3/5, автор, ⭐    →  EventResponse (participants, organizer, rating)
+[Участвовать] / [Отменить] →  isJoined + POST join/leave
+```
+
+### Экран деталей
+
+```
+Тип, теги, описание       →  activityId, tags[], description
+Дата, 📍 место            →  startsAt, endsAt, location
+Организатор LVL ⭐        →  organizer (UserSummary из UserService)
+Участники 3/4             →  participants[], capacity
+```
+
+Базовый URL: `http://localhost:9011/eventservice/api`  
+Заголовок: `X-User-Id: <id>`  
+Контракт ответов — `EventItem`, `Page<EventItem>`, `EventPin`, `Tag` в `types.ts`.
+
+---
+
+## 4. Модель данных (Postgres)
+
+Основные таблицы (Liquibase `backend/eventservice/src/main/resources/db/changelog/`):
+
+- `events` — ивент (title, activity_id, description, starts_at, ends_at, lat/lng, address, capacity, organizer_id)
+- `event_participants` — участники (составной PK event_id + user_id)
+- `event_tags`, `tags` — теги
+- `chat_messages`, `chat_read_state` — чат
+
+Типы активности (`activity_id`) — 19 значений из `frontend/src/lib/activities.ts` (`basketball`, `football`, …). Emoji и category — только на фронте.
+
+UserService хранит пользователей отдельно в БД `userservice`; EventService хранит только `organizer_id` / `user_id` и обогащает через REST.
+
+---
+
+## 5. Фазы (дорожная карта)
+
+### Фаза 0 — Каркас ✅
+
+- [x] Spring Boot, Flyway/Liquibase, Docker Postgres + Kafka
+- [x] Gradle wrapper 9.5.1, Java 25
+- [x] `chat-contract` + `includeBuild`
+- [x] Заглушка auth: `X-User-Id`
+
+### Фаза 1 — Ядро ивентов ✅
+
+- [x] CRUD создание + список + детали
+- [x] join / leave
+- [x] mine (organizing / participating)
+- [x] seed-скрипты (`scripts/seed-events.sh`, `.mjs`)
+- [x] Интеграция UserService
+
+### Фаза 2 — Фильтры и карта ✅
+
+- [x] Фильтры activityIds, tagIds, дата, гео
+- [x] Map pins
+- [x] Справочник тегов
+
+### Фаза 3 — Чат ✅
+
+- [x] REST чат в EventService
+- [x] Kafka producer
+- [x] realtime-service WebSocket
+
+### Фаза 4 — Фронт ↔ бэк 🟡 (текущая)
+
+- [x] `httpEventsClient`, `httpUsersClient`, `httpChatsClient`
+- [ ] E2E-проверка всех экранов на живом API
+- [ ] Выравнивание DTO (если есть расхождения полей)
+- [ ] Документировать `.env.local` для команды
+
+### Фаза 5 — Доработки MVP
+
+- [ ] Редактирование / удаление ивента (организатор)
+- [ ] Postgres FTS вместо in-memory `matchesText` (база для NL-поиска)
+- [ ] Новостная лента `/feed` (подписки + теги + гео)
+- [ ] JWT + Gateway / Keycloak вместо `X-User-Id`
+- [ ] Реальная оплата публикации
+- [ ] NotificationService (push/email)
+- [ ] **Умный поиск (NL → фильтры)** — см. §11: правило-based intent, без LLM
+
+### Фаза 6 — AI-поиск и персонализация
+
+- [ ] LLM-парсер сложных запросов (fallback к правилам)
+- [ ] Семантический / hybrid search (эмбеддинги + FTS)
+- [ ] Персонализация: интересы профиля + история join
+- [ ] Подсказки («Похоже, вы имели в виду…») и чипы разбора запроса
+
+### Фаза 7 — Пост-MVP
+
+- [ ] UserIntention, геопоиск людей на карте
+- [ ] Follow-система, рейтинги, геймификация LVL
+- [ ] Пользовательские типы активностей + модерация
+
+---
+
+## 6. Локальная разработка
+
+### Запуск
+
+```bash
+cd backend
+cp .env.example .env
+docker compose up -d
+
+cd eventservice && ./gradlew bootRun    # http://localhost:9011
+cd userservice && ./gradlew bootRun     # http://localhost:9002
+cd realtime-service && ./gradlew bootRun # http://localhost:9003
+
+cd eventservice && ./scripts/seed-events.sh   # 20 тестовых ивентов
+```
+
+### Порты и грабли (Windows)
+
+| Проблема | Решение |
+|---|---|
+| Postgres auth failed на `5432` | Локальный `postgres.exe` конфликтует с Docker → Postgres в compose на **5433** |
+| Port 9001 in use | `trantorAgent.exe` занимает 9001 → EventService на **9011** (`SERVER_PORT`) |
+| Gradle `major version 69` | IDE: Wrapper **9.5.1**, не bundled Gradle 8.5 |
+| `gradle-wrapper.properties not found` | Открывать `backend/eventservice`, не корень монорепо |
+| `ChatMessageCreatedEvent` not found | Зависимость `chat-contract` + Gradle Sync |
+
+### IntelliJ
+
+- **Open:** `backend/eventservice` (или `userservice`, `realtime-service`, `chat-contract`)
+- **Gradle distribution:** Wrapper
+- **Gradle JVM:** JDK 25
+
+### Фронт с живым бэком
+
+`frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_USE_MOCK_EVENTS=false
+NEXT_PUBLIC_USE_MOCK_USERS=false
+NEXT_PUBLIC_USE_MOCK_CHATS=false
+NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
+```
+
+---
+
+## 7. Kafka-события
+
+| Топик | Producer | Consumer | Назначение |
+|---|---|---|---|
+| `chat.message.created` | EventService | realtime-service | Push в WebSocket |
+
+Контракт: `org.javaguru.chat.kafka.ChatMessageCreatedEvent` в `chat-contract`.
+
+---
+
+## 8. Открытые вопросы
+
+| # | Вопрос | Рекомендация на сейчас |
+|---|---|---|
+| 1 | FTS: Postgres vs Elasticsearch | Postgres `tsvector` в фазе 5 |
+| 2 | Рейтинг / LVL в карточке | Читать из UserService; рейтинг ивента = организатора |
+| 3 | Платная публикация 50 ₽ | `publishQuote` — заглушка до платёжки |
+| 4 | Формула ленты | Отложить до фазы 5 |
+| 5 | JWT vs X-User-Id | X-User-Id до Gateway/Keycloak |
+| 6 | AI-поиск: LLM vs только правила | Сначала правила + словари (§11); LLM — фаза 6 |
+| 7 | Город «Москва» без координат у ивента | Геокодинг адреса при create + таблица городов / bbox |
+
+---
+
+## 9. Пробелы плана (ревью полноты)
+
+Что в плане было слабым или отсутствовало относительно спеки/кода:
+
+| Пробел | Почему важно | Куда |
+|---|---|---|
+| NL / «умный» поиск | Сейчас `query` — подстрока; «седня футбик в москоу» не сработает | §11, фазы 5–6 |
+| Поиск не в SQL | `matchesText` грузит все ивенты в память — не масштабируется | FTS в фазе 5 |
+| Edit/delete ивента | В MVP спеке есть, в API нет | фаза 5 |
+| Редактирование сообщений чата | В MVP есть, в API только send | бэклог чата |
+| Геокодинг при создании | Адрес текстом, пин часто «центр Москвы» | фаза 5–6 |
+| CORS / Gateway | Прямые вызовы :9011 с фронта | JWT + gateway |
+| Тесты контракта фронт↔бэк | DTO могут разъехаться | фаза 4 E2E |
+| Observability | Нет метрик/трейсов в плане | прод-готовность |
+| Capacity / EVENT_FULL UX | Есть на бэке, на фронте слабо описано | UI + i18n |
+| Offline / PWA push | В MVP спеке, в плане не раскрыто | пост-MVP |
+
+---
+
+## 10. Следующие задачи (приоритет)
+
+1. **E2E:** фронт на `NEXT_PUBLIC_USE_MOCK_*=false` — список, детали, join/leave, создать ивент.
+2. **PUT/PATCH/DELETE** ивента — только организатор.
+3. **FTS** — `search_vector` + GIN; синонимы активностей в индекс.
+4. **NL-поиск v1** — `POST /events/search/parse` → структурированные фильтры (§11.3).
+5. **JWT** — gateway + убрать `X-User-Id` с фронта.
+6. **CI** — сборка `eventservice` + `userservice` в pipeline.
+
+---
+
+## 11. Умный поиск ивентов (NL → фильтры)
+
+Цель: запрос вроде **«найди седня или завтра футбик в москоу»** превращается в те же фильтры, что уже есть (`activityIds`, `from`/`to`, `near`/`radiusKm`, `query`), а не в «магический» поиск по сырой строке.
+
+### 11.1 Почему текущий `query` не справляется
+
+Пример: `седня или завтра футбик в москоу`
+
+| Слово | Смысл | Сейчас |
+|---|---|---|
+| седня | сегодня | нет в title/description → отсекает всё |
+| завтра | дата | не мапится в `from`/`to` |
+| футбик | football | `activityId` = `football`, не подстрока |
+| москоу | Москва | адрес/гео, не lat/lng фильтр |
+| найди / или | шум | тоже ищутся как слова |
+
+Нужен слой **intent parsing**, а не усиление `contains()`.
+
+### 11.2 Рекомендуемая архитектура (3 уровня)
+
+```
+Пользователь: "седня или завтра футбик в москоу"
+        │
+        ▼
+┌───────────────────────┐
+│  SearchIntentParser   │  ← сначала правила, потом опционально LLM
+└───────────┬───────────┘
+            │ SearchIntent
+            │  activityIds: [football]
+            │  from: today 00:00
+            │  to:   tomorrow 23:59
+            │  near: Москва bbox / geo
+            │  freeText: null
+            ▼
+┌───────────────────────┐
+│  EventService.list()  │  ← уже существующие фильтры (+ FTS)
+└───────────────────────┘
+```
+
+**Уровень A — правила (фаза 5, без LLM):** словари опечаток/сленга + дата/время + город.  
+**Уровень B — LLM structured output (фаза 6):** JSON-схема `SearchIntent`, fallback к A при ошибке/таймауте.  
+**Уровень C — семантика (фаза 6+):** эмбеддинги description/title + hybrid rank (FTS + vector).
+
+Не начинать с LLM: для 19 `ActivityId` и дат/городов правила дешевле, быстрее и предсказуемее.
+
+### 11.3 Контракт `SearchIntent`
+
+```json
+{
+  "rawQuery": "найди седня или завтра футбик в москоу",
+  "activityIds": ["football"],
+  "from": "2026-07-17T00:00:00Z",
+  "to": "2026-07-18T23:59:59Z",
+  "near": { "lat": 55.75, "lng": 37.62 },
+  "radiusKm": 25,
+  "city": "Москва",
+  "tagIds": [],
+  "freeText": null,
+  "interpretedAs": {
+    "when": "сегодня или завтра",
+    "what": "Футбол",
+    "where": "Москва"
+  },
+  "confidence": 0.92
+}
+```
+
+API (предложение):
+
+| Метод | Назначение |
+|---|---|
+| `POST /eventservice/api/events/search/parse` | строка → `SearchIntent` (UI показывает чипы) |
+| `GET /events?...` | как сейчас, но фронт шлёт уже разобранные params |
+| или `POST /events/search` | parse + list в одном вызове |
+
+На UI: после разбора показать чипы **«Футбол · Сегодня–завтра · Москва»** с возможностью снять фильтр — пользователь видит, что понял бот.
+
+### 11.4 Словари уровня A (минимум для демо)
+
+**Даты:** `сегодня|седня|сёдня|today` → `[now, endOfDay]`; `завтра` → next day; `на выходных` → ближайшие сб–вс; `вечером` → 18:00–23:59; `утром` → 06:00–12:00.
+
+**Активности (синонимы → `ActivityId`):**
+
+| activityId | Примеры |
+|---|---|
+| football | футбол, футбик, soccer, 5х5, фут |
+| basketball | баскет, 3х3, стритбол |
+| volleyball | волейбол, пляжный |
+| bowling | боулинг |
+| karaoke | караоке |
+| coffee | кофе, кофейня |
+| … | по всем 19 из `activities.ts` |
+
+**Гео:** `москва|москоу|мск|moscow` → bbox/центр + `radiusKm` (по умолчанию 20–30); `рядом` → `near` из геолокации пользователя.
+
+**Шум:** `найди`, `хочу`, `ищу`, `пожалуйста`, `или` (для дат — union диапазонов).
+
+Опечатки: нормализация (`ё→е`), простой edit-distance ≤1 к словарю или `pg_trgm`.
+
+### 11.5 Пример разбора
+
+Ввод: `найди седня или завтра футбик в москоу`
+
+1. Убрать шум: `седня или завтра футбик в москоу`
+2. Даты: `седня` ∪ `завтра` → `from=сегодня 00:00`, `to=завтра 23:59`
+3. Активность: `футбик` → `football`
+4. Место: `москоу` → Москва, `near` + `radiusKm=25`
+5. Вызов существующего `list(...)` — без LLM.
+
+### 11.6 LLM (фаза 6) — когда правила не хватает
+
+Сложные фразы: «что-нибудь спокойное вечером недалеко от Патриков», «ищу пару на теннис подешевле».
+
+- Промпт: список `ActivityId` + тегов + «верни только JSON по схеме».
+- Провайдер за абстракцией `SearchIntentParser` (OpenAI / локальная модель).
+- Таймаут 800ms → fallback к правилам; кэш по нормализованной строке.
+- Не отдавать LLM сырой SQL — только JSON intent.
+
+### 11.7 Семантика / hybrid (фаза 6+)
+
+- Колонка `embedding` (pgvector) по `title + description + activity + address`
+- Rank: `α * fts_rank + β * vector_similarity + γ * geo_distance + δ * starts_at_proximity`
+- Имеет смысл после FTS и стабильного каталога активностей
+
+### 11.8 Фронт
+
+1. Строка поиска как сейчас.
+2. Debounce → `parse` → чипы интерпретации.
+3. Список через обычный `list` с params из intent.
+4. Placeholder: «сегодня футбол в Москве» (примеры в `ru.ts`).
+5. Голос (опционально) → та же строка в parser.
+
+### 11.9 Критерии готовности NL v1
+
+- [ ] «завтра футбол» → только football на завтра
+- [ ] «седня футбик в москоу» → football, сегодня–завтра или сегодня, Москва
+- [ ] «караоке вечером» → karaoke + вечерний диапазон
+- [ ] Чистый «ВДНХ» → freeText/address FTS без ложной активности
+- [ ] Пустой/мусорный запрос → пустой intent, обычный list
+- [ ] Парсер < 50ms (правила) или < 1s (LLM с fallback)
+
+---
+
+## 12. Ссылки
+
+- [EVENTS_SERVICE_MVP.md](./EVENTS_SERVICE_MVP.md) — продуктовая спека
+- [sketch.excalidraw](./sketch.excalidraw) — UI-эскиз (источник истины по интерфейсу)
+- [frontend/AGENTS.md](../frontend/AGENTS.md) — стек и грабли фронта
+- [backend/.env.example](../backend/.env.example) — переменные окружения
+- [frontend/src/lib/activities.ts](../frontend/src/lib/activities.ts) — каталог `ActivityId` для словарей поиска

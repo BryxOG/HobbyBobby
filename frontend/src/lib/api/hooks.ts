@@ -125,6 +125,18 @@ function useMembershipMutation(action: "join" | "leave") {
 export const useJoinEvent = () => useMembershipMutation("join");
 export const useLeaveEvent = () => useMembershipMutation("leave");
 
+export function useCancelEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.events.cancel(id),
+    onSuccess: (event: EventItem) => {
+      qc.setQueryData(qk.eventDetail(event.id), event);
+      qc.invalidateQueries({ queryKey: qk.events });
+      qc.invalidateQueries({ queryKey: ["map"] });
+    },
+  });
+}
+
 export function useCreateEvent() {
   const qc = useQueryClient();
   return useMutation({

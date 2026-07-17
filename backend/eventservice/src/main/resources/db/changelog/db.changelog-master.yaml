@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/changes/005-create-tags-tables.yaml
   - include:
       file: db/changelog/changes/006-insert-tags-test-data.yaml
+  - include:
+      file: db/changelog/changes/007-add-event-notification-fields.yaml
