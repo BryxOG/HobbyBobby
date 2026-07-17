@@ -5,6 +5,7 @@ export const qk = {
   eventList: (q: EventListQuery) => ["events", "list", q] as const,
   eventDetail: (id: string) => ["events", "detail", id] as const,
   eventsMine: (scope: MyEventsScope) => ["events", "mine", scope] as const,
+  eventsMineFeed: (q: EventListQuery) => ["events", "mine-feed", q] as const,
   publishQuote: ["events", "publish-quote"] as const,
   pins: (q: EventListQuery) => ["map", "pins", q] as const,
   chats: ["chats"] as const,

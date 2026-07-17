@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.javaguru.eventservice.entity.EventEntity;
 import org.javaguru.eventservice.entity.EventParticipantEntity;
 import org.javaguru.eventservice.entity.EventParticipantEntity.EventParticipantId;
+import org.javaguru.eventservice.exception.ConflictException;
 import org.javaguru.eventservice.exception.ResourceNotFoundException;
 import org.javaguru.eventservice.repository.EventParticipantRepository;
 import org.javaguru.eventservice.repository.EventRepository;
@@ -19,6 +20,7 @@ public class EventMembershipService {
 
     private final EventRepository eventRepository;
     private final EventParticipantRepository participantRepository;
+    private final EventService eventService;
 
     /**
      * Добавляет пользователя в участники ивента.
@@ -34,6 +36,10 @@ public class EventMembershipService {
         }
         if (participantRepository.existsByIdEventIdAndIdUserId(eventId, userId)) {
             return;
+        }
+        int count = participantRepository.findUserIdsByEventId(eventId).size();
+        if (count >= event.getCapacity()) {
+            throw new ConflictException("EVENT_FULL");
         }
         EventParticipantEntity participant = new EventParticipantEntity();
         participant.setId(new EventParticipantId(eventId, userId));

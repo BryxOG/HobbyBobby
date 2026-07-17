@@ -1,0 +1,60 @@
+### Events API (EventService :9001)
+
+@baseUrl = http://localhost:9001/eventservice/api
+@userId = 1
+
+### Список ивентов
+GET {{baseUrl}}/events
+X-User-Id: {{userId}}
+
+### Карточка ивента
+GET {{baseUrl}}/events/e-basketball-1
+X-User-Id: {{userId}}
+
+### Мои ивенты — организую
+GET {{baseUrl}}/events/mine?scope=organizing
+X-User-Id: {{userId}}
+
+### Мои ивенты — участвую
+GET {{baseUrl}}/events/mine?scope=participating
+X-User-Id: {{userId}}
+
+### Пины на карте
+GET {{baseUrl}}/map/pins
+X-User-Id: {{userId}}
+
+### Теги
+GET {{baseUrl}}/tags
+X-User-Id: {{userId}}
+
+### Котировка публикации
+GET {{baseUrl}}/events/publish-quote
+X-User-Id: {{userId}}
+
+### Создать ивент
+POST {{baseUrl}}/events
+X-User-Id: {{userId}}
+Content-Type: application/json
+
+{
+  "title": "Тестовый ивент",
+  "activityId": "basketball",
+  "description": "Описание тестового ивента",
+  "startsAt": "2026-08-01T18:00:00.000Z",
+  "endsAt": "2026-08-01T20:00:00.000Z",
+  "location": {
+    "lat": 55.7558,
+    "lng": 37.6173,
+    "address": "Лужники"
+  },
+  "capacity": 6,
+  "tagIds": ["t-friendly", "t-evening"]
+}
+
+### Участвовать
+POST {{baseUrl}}/events/e-karaoke-1/join
+X-User-Id: {{userId}}
+
+### Покинуть
+POST {{baseUrl}}/events/e-karaoke-1/leave
+X-User-Id: {{userId}}

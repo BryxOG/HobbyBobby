@@ -93,7 +93,11 @@ export default function MenuPage() {
             label={ru.menu.profile}
             href={isLoggedIn ? "/menu/profile" : "/login"}
           />
-          <ListRow icon="🎉" label={ru.menu.myEvents} href="/menu/my-events" />
+          <ListRow
+            icon="🎉"
+            label={ru.menu.myEvents}
+            href={isLoggedIn ? "/menu/my-events" : "/login"}
+          />
           <ListRow icon="🤔" label={ru.menu.interests} href="/menu/interests" />
           <ListRow icon="⚙️" label={ru.menu.settings} href="/menu/settings" />
         </ListGroup>

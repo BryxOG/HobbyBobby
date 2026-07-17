@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ACTIVITIES } from "@/lib/activities";
-import { useEvents } from "@/lib/api/hooks";
+import { useEvents, useMyEventsFeed } from "@/lib/api/hooks";
+import { USING_MOCKS } from "@/lib/api/client";
 import type { ActivityId } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { useDebounced } from "@/lib/useDebounced";
 import { EventCard } from "@/components/events/EventCard";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +20,14 @@ import {
   EventListSkeleton,
 } from "@/components/ui/States";
 
+type FeedMode = "all" | "mine";
+
 export default function EventsPage() {
+  const router = useRouter();
+  const userId = useAuth((s) => s.userId);
+  const isLoggedIn = USING_MOCKS || Boolean(userId);
+
+  const [feedMode, setFeedMode] = useState<FeedMode>("all");
   const [search, setSearch] = useState("");
   const [activities, setActivities] = useState<ActivityId[]>([]);
   const query = useDebounced(search);
@@ -27,6 +37,8 @@ export default function EventsPage() {
     [query, activities],
   );
 
+  const allEvents = useEvents(filters, feedMode === "all");
+  const myEvents = useMyEventsFeed(filters, feedMode === "mine");
   const {
     data,
     isPending,
@@ -35,9 +47,22 @@ export default function EventsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useEvents(filters);
+  } = feedMode === "all" ? allEvents : myEvents;
 
   const events = data?.pages.flatMap((p) => p.items) ?? [];
+
+  function selectMine() {
+    if (!isLoggedIn) {
+      router.push("/login");
+      return;
+    }
+    setFeedMode("mine");
+  }
+
+  function selectAll() {
+    setFeedMode("all");
+    setActivities([]);
+  }
 
   function toggle(id: ActivityId) {
     setActivities((prev) =>
@@ -59,9 +84,12 @@ export default function EventsPage() {
         {/* Bleed to the screen edges so the row reads as scrollable. */}
         <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex w-max gap-2 pb-1">
+            <Chip selected={feedMode === "mine"} onClick={selectMine}>
+              {ru.events.myEvents}
+            </Chip>
             <Chip
-              selected={activities.length === 0}
-              onClick={() => setActivities([])}
+              selected={feedMode === "all" && activities.length === 0}
+              onClick={selectAll}
             >
               {ru.map.filterAll}
             </Chip>
@@ -84,7 +112,16 @@ export default function EventsPage() {
         {isError && <ErrorState onRetry={() => refetch()} />}
 
         {!isPending && !isError && events.length === 0 && (
-          <EmptyState title={ru.events.empty} hint={ru.events.emptyHint} />
+          <EmptyState
+            title={
+              feedMode === "mine" ? ru.events.emptyMine : ru.events.empty
+            }
+            hint={
+              feedMode === "mine"
+                ? ru.events.emptyMineHint
+                : ru.events.emptyHint
+            }
+          />
         )}
 
         {events.map((event) => (
