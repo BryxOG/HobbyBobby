@@ -1,3 +1,5 @@
+# Только инфраструктура для локальной разработки (Gradle bootRun).
+# Полный стек с backend и frontend: docker compose -f ../docker-compose.yml up
 services:
   kafka:
     image: apache/kafka:3.9.0
