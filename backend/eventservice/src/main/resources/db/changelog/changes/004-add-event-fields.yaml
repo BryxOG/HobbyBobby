@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-add-event-fields
+      author: eventservice
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: description
+                  type: TEXT
+                  defaultValue: ""
+                  constraints:
+                    nullable: false
+              - column:
+                  name: starts_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ends_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW() + INTERVAL '2 hours'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lat
+                  type: DOUBLE PRECISION
+                  defaultValueNumeric: 55.7558
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lng
+                  type: DOUBLE PRECISION
+                  defaultValueNumeric: 37.6173
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address
+                  type: VARCHAR(512)
+                  defaultValue: ""
+                  constraints:
+                    nullable: false
+              - column:
+                  name: capacity
+                  type: INT
+                  defaultValueNumeric: 6
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rating
+                  type: DECIMAL(3, 2)
+                  constraints:
+                    nullable: true

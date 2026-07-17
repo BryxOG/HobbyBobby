@@ -7,52 +7,82 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, USING_MOCKS } from "./client";
+import { USING_MOCK_CHATS } from "./http/chats";
+import { USING_MOCK_EVENTS } from "./http/events";
+import { httpEventMembership } from "./http/eventMembership";
+import {
+  appendMessageToCache,
+  markChatReadInCache,
+  touchChatListCache,
+} from "./realtime/chatCache";
 import { useAuth } from "@/lib/stores/auth";
 import type {
   ActivityId,
+  ChatMessage,
   EventItem,
   EventListQuery,
   MyEventsScope,
   UserProfile,
 } from "./types";
 
-export const qk = {
-  events: ["events"] as const,
-  eventList: (q: EventListQuery) => ["events", "list", q] as const,
-  eventDetail: (id: string) => ["events", "detail", id] as const,
-  eventsMine: (scope: MyEventsScope) => ["events", "mine", scope] as const,
-  publishQuote: ["events", "publish-quote"] as const,
-  pins: (q: EventListQuery) => ["map", "pins", q] as const,
-  chats: ["chats"] as const,
-  messages: (eventId: string) => ["chats", eventId, "messages"] as const,
-  me: ["users", "me"] as const,
-  tags: ["tags"] as const,
-};
+import { qk } from "./queryKeys";
+
+export { qk };
 
 /* --- Events ---------------------------------------------------------------- */
-
-export function useEvents(query: EventListQuery = {}) {
+export function useEvents(query: EventListQuery = {}, active = true) {
+  const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
     queryKey: qk.eventList(query),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => api.events.list({ ...query, cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
+    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
+  });
+}
+
+/** Лента «Мои ивенты» — организую + участвую, объединённые и отсортированные. */
+export function useMyEventsFeed(query: EventListQuery = {}, active = true) {
+  const userId = useAuth((s) => s.userId);
+  return useInfiniteQuery({
+    queryKey: qk.eventsMineFeed(query),
+    initialPageParam: null as string | null,
+    queryFn: async () => {
+      const [organizing, participating] = await Promise.all([
+        api.events.mine("organizing", query),
+        api.events.mine("participating", query),
+      ]);
+      const byId = new Map<string, EventItem>();
+      for (const event of [...organizing.items, ...participating.items]) {
+        byId.set(event.id, event);
+      }
+      const items = [...byId.values()].sort((a, b) =>
+        a.startsAt.localeCompare(b.startsAt),
+      );
+      return { items, nextCursor: null, total: items.length };
+    },
+    getNextPageParam: () => null,
+    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
   });
 }
 
 export function useEvent(id: string) {
+  const userId = useAuth((s) => s.userId);
   return useQuery({
     queryKey: qk.eventDetail(id),
     queryFn: () => api.events.get(id),
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
 export function useMyEvents(scope: MyEventsScope) {
+  const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
     queryKey: qk.eventsMine(scope),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => api.events.mine(scope, { cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
@@ -71,8 +101,19 @@ export function usePublishQuote() {
 function useMembershipMutation(action: "join" | "leave") {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      action === "join" ? api.events.join(id) : api.events.leave(id),
+    mutationFn: async (id: string) => {
+      if (!USING_MOCK_EVENTS && !USING_MOCK_CHATS) {
+        return action === "join" ? api.events.join(id) : api.events.leave(id);
+      }
+      if (!USING_MOCK_CHATS) {
+        if (action === "join") {
+          await httpEventMembership.join(id);
+        } else {
+          await httpEventMembership.leave(id);
+        }
+      }
+      return action === "join" ? api.events.join(id) : api.events.leave(id);
+    },
     onSuccess: (event: EventItem) => {
       qc.setQueryData(qk.eventDetail(event.id), event);
       qc.invalidateQueries({ queryKey: qk.events });
@@ -93,6 +134,7 @@ export function useCreateEvent() {
       qc.invalidateQueries({ queryKey: qk.events });
       qc.invalidateQueries({ queryKey: ["map"] });
       qc.invalidateQueries({ queryKey: qk.me });
+      qc.invalidateQueries({ queryKey: ["events", "mine"] });
     },
   });
 }
@@ -100,23 +142,52 @@ export function useCreateEvent() {
 /* --- Map ------------------------------------------------------------------- */
 
 export function usePins(query: EventListQuery = {}) {
+  const userId = useAuth((s) => s.userId);
   return useQuery({
     queryKey: qk.pins(query),
     queryFn: () => api.map.pins(query),
-    placeholderData: (prev) => prev, // Keep old pins while re-filtering.
+    placeholderData: (prev) => prev,
+    enabled: USING_MOCK_EVENTS || Boolean(userId),
   });
 }
 
 /* --- Chats ----------------------------------------------------------------- */
 
 export function useChats() {
-  return useQuery({ queryKey: qk.chats, queryFn: () => api.chats.list() });
+  const userId = useAuth((s) => s.userId);
+  return useQuery({
+    queryKey: qk.chats,
+    queryFn: () => api.chats.list(),
+    enabled: USING_MOCK_CHATS || Boolean(userId),
+  });
 }
 
 export function useMessages(eventId: string) {
+  const userId = useAuth((s) => s.userId);
+  const qc = useQueryClient();
   return useQuery({
     queryKey: qk.messages(eventId),
-    queryFn: () => api.chats.messages(eventId),
+    queryFn: async () => {
+      try {
+        const messages = await api.chats.messages(eventId);
+        markChatReadInCache(qc, eventId);
+        return messages;
+      } catch (error) {
+        const forbidden =
+          error instanceof Error &&
+          (error.message.includes("403") ||
+            error.message.includes("Нет доступа"));
+        if (!USING_MOCK_CHATS && forbidden) {
+          await httpEventMembership.join(eventId);
+          const messages = await api.chats.messages(eventId);
+          markChatReadInCache(qc, eventId);
+          qc.invalidateQueries({ queryKey: qk.chats });
+          return messages;
+        }
+        throw error;
+      }
+    },
+    enabled: USING_MOCK_CHATS || Boolean(userId),
   });
 }
 
@@ -124,9 +195,9 @@ export function useSendMessage(eventId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (text: string) => api.chats.send(eventId, text),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.messages(eventId) });
-      qc.invalidateQueries({ queryKey: qk.chats });
+    onSuccess: (message: ChatMessage) => {
+      appendMessageToCache(qc, message);
+      touchChatListCache(qc, message);
     },
   });
 }
