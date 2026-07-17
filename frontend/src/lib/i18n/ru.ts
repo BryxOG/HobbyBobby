@@ -89,6 +89,9 @@ export const ru = {
     detailsEnd: "Конец",
     detailsPlace: "Место",
     detailsPlacePlaceholder: "Адрес или название места",
+    detailsMapHint: "Нажмите на карту, чтобы выбрать точку",
+    detailsCoords: (lat: number, lng: number) =>
+      `Координаты: lat=${lat.toFixed(6)}, lng=${lng.toFixed(6)}`,
     detailsCapacity: "Сколько человек",
     detailsPickOnMap: "Указать на карте",
     publish: "Публикация",
@@ -126,6 +129,8 @@ export const ru = {
     locationDenied: "Доступ к геолокации запрещён",
     geoOff: "Геолокация выключена в настройках",
     nothingHere: "Здесь пока нет ивентов",
+    loadError: "Не удалось загрузить Яндекс Карты",
+    noApiKey: "Добавьте NEXT_PUBLIC_YANDEX_MAPS_API_KEY в окружение фронта",
     pinsCount: (n: number) => `${n} ${plural(n, "ивент", "ивента", "ивентов")}`,
   },
 

@@ -117,12 +117,6 @@ select {
   box-shadow: 0 0 0 4px rgb(34 139 230 / 0.25);
 }
 
-/* MapLibre's default controls read as "web", not iOS. */
-.maplibregl-ctrl-group {
-  border-radius: 12px !important;
-  overflow: hidden;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

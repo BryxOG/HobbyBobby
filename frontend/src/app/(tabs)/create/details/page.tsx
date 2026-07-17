@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTags } from "@/lib/api/hooks";
@@ -10,6 +11,12 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Field, inputClass } from "@/components/ui/Field";
 import { Header } from "@/components/ui/Header";
+import { Skeleton } from "@/components/ui/States";
+
+const LocationPickerMap = dynamic(
+  () => import("@/components/map/LocationPickerMap").then((m) => m.LocationPickerMap),
+  { ssr: false, loading: () => <Skeleton className="h-56 w-full rounded-card" /> },
+);
 
 /** Step 2 of 4 — "Детали": название, описание, дата/время, место. */
 export default function DetailsPage() {
@@ -130,6 +137,29 @@ export default function DetailsPage() {
             />
           )}
         </Field>
+
+        <div className="space-y-2">
+          <p className="px-1 text-[13px] font-medium text-fg-muted">
+            {ru.create.detailsMapHint}
+          </p>
+          <LocationPickerMap
+            value={draft.location}
+            onPick={({ lat, lng }) =>
+              draft.patch({
+                location: {
+                  lat,
+                  lng,
+                  address: draft.location?.address ?? "",
+                },
+              })
+            }
+          />
+          {draft.location && (
+            <p className="px-1 text-[12px] text-fg-muted">
+              {ru.create.detailsCoords(draft.location.lat, draft.location.lng)}
+            </p>
+          )}
+        </div>
 
         <Field label={ru.create.detailsCapacity}>
           {(p) => (
