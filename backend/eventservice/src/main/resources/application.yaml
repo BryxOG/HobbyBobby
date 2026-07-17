@@ -24,6 +24,9 @@ app:
     base-url: ${USER_SERVICE_BASE_URL:http://localhost:9002/userservice/api}
   chat:
     kafka-topic: chat.message.created
+  notification:
+    reminder-topic: event.reminder.due
+    cancelled-topic: event.cancelled
 
 server:
   port: 9001

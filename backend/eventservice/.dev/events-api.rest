@@ -58,3 +58,7 @@ X-User-Id: {{userId}}
 ### Покинуть
 POST {{baseUrl}}/events/e-karaoke-1/leave
 X-User-Id: {{userId}}
+
+### Отменить ивент (только организатор)
+POST {{baseUrl}}/events/e-basketball-1/cancel
+X-User-Id: {{userId}}

@@ -8,6 +8,7 @@ import org.javaguru.eventservice.dto.EventResponse;
 import org.javaguru.eventservice.dto.TagResponse;
 import org.javaguru.eventservice.dto.UserSummaryResponse;
 import org.javaguru.eventservice.entity.EventEntity;
+import org.javaguru.eventservice.entity.EventStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -48,7 +49,9 @@ public class EventMapper {
                 entity.getCapacity(),
                 tags,
                 isJoined,
-                entity.getRating()
+                entity.getRating(),
+                entity.getStatus() != null ? entity.getStatus().name() : EventStatus.ACTIVE.name(),
+                entity.getCancelledAt()
         );
     }
 

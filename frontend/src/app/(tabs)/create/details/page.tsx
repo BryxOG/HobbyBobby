@@ -4,9 +4,11 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTags } from "@/lib/api/hooks";
+import { resolvePlaceByAddress, reverseGeocodePlace } from "@/lib/geo/client";
 import { ru } from "@/lib/i18n/ru";
 import { useDraft } from "@/lib/stores/draft";
 import { ActivityIcon } from "@/components/events/ActivityIcon";
+import { PlacePicker } from "@/components/map/PlacePicker";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Field, inputClass } from "@/components/ui/Field";
@@ -24,6 +26,7 @@ export default function DetailsPage() {
   const draft = useDraft();
   const { data: tags } = useTags();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [mapResolving, setMapResolving] = useState(false);
 
   // Deep-linking here without a type would render a broken step.
   useEffect(() => {
@@ -32,20 +35,58 @@ export default function DetailsPage() {
 
   if (!draft.activityId) return null;
 
-  function validate(): boolean {
+  function validate(location = draft.location): boolean {
     const next: Record<string, string> = {};
     if (!draft.title.trim()) next.title = ru.create.errorTitle;
     if (!draft.description.trim()) next.description = ru.create.errorDescription;
-    if (!draft.location?.address.trim()) next.place = ru.create.errorPlace;
+    if (!location?.address.trim()) next.place = ru.create.errorPlace;
     if (new Date(draft.endsAt) <= new Date(draft.startsAt))
       next.time = ru.create.errorTime;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (validate()) router.push("/create/publish");
+
+    let location = draft.location;
+    if (location?.address.trim()) {
+      try {
+        const resolved = await resolvePlaceByAddress(location.address);
+        if (resolved) {
+          location = resolved;
+          draft.patch({ location: resolved });
+        }
+      } catch {
+        // Оставляем введённый адрес — валидация ниже решит, можно ли идти дальше.
+      }
+    }
+
+    if (validate(location)) router.push("/create/publish");
+  }
+
+  async function onMapPick(coords: { lat: number; lng: number }) {
+    setMapResolving(true);
+    try {
+      const place = await reverseGeocodePlace(coords.lat, coords.lng);
+      draft.patch({
+        location: place ?? {
+          lat: coords.lat,
+          lng: coords.lng,
+          address: draft.location?.address ?? "",
+        },
+      });
+    } catch {
+      draft.patch({
+        location: {
+          lat: coords.lat,
+          lng: coords.lng,
+          address: draft.location?.address ?? "",
+        },
+      });
+    } finally {
+      setMapResolving(false);
+    }
   }
 
   return (
@@ -118,22 +159,12 @@ export default function DetailsPage() {
 
         <Field label={ru.create.detailsPlace} error={errors.place}>
           {(p) => (
-            <input
+            <PlacePicker
               {...p}
-              value={draft.location?.address ?? ""}
-              onChange={(e) =>
-                draft.patch({
-                  location: {
-                    // Geocoding lands with the backend; until then pin to Moscow
-                    // centre so the map still has something to show.
-                    lat: draft.location?.lat ?? 55.7558,
-                    lng: draft.location?.lng ?? 37.6173,
-                    address: e.target.value,
-                  },
-                })
-              }
-              placeholder={ru.create.detailsPlacePlaceholder}
-              className={inputClass(Boolean(errors.place))}
+              invalid={Boolean(errors.place)}
+              value={draft.location}
+              near={draft.location}
+              onChange={(location) => draft.patch({ location })}
             />
           )}
         </Field>
@@ -144,16 +175,11 @@ export default function DetailsPage() {
           </p>
           <LocationPickerMap
             value={draft.location}
-            onPick={({ lat, lng }) =>
-              draft.patch({
-                location: {
-                  lat,
-                  lng,
-                  address: draft.location?.address ?? "",
-                },
-              })
-            }
+            onPick={(coords) => void onMapPick(coords)}
           />
+          {mapResolving && (
+            <p className="px-1 text-[12px] text-fg-muted">{ru.create.placeResolving}</p>
+          )}
           {draft.location && (
             <p className="px-1 text-[12px] text-fg-muted">
               {ru.create.detailsCoords(draft.location.lat, draft.location.lng)}

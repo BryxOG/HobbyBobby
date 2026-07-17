@@ -1,0 +1,13 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+.idea/
+*.iml
+out/
+.DS_Store
+
+# Firebase service account (скачивается из Firebase Console, не коммитить)
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
