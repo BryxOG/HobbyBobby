@@ -6,12 +6,12 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:18080/realms/hobbybobby"
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:18080/realms/hobbybobby",
+        "gateway.security.fallback-user-id=1"
 })
 @AutoConfigureMockMvc
 class GatewaySecurityTest {
@@ -44,7 +45,7 @@ class GatewaySecurityTest {
     @BeforeAll
     static void startDownstream() throws IOException {
         downstream = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        downstream.createContext("/events/ping", GatewaySecurityTest::writeRequestSummary);
+        downstream.createContext("/", GatewaySecurityTest::writeRequestSummary);
         downstream.setExecutor(Executors.newSingleThreadExecutor());
         downstream.start();
     }
@@ -85,10 +86,26 @@ class GatewaySecurityTest {
                                 )
                                 .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("path=/events/ping")))
-                .andExpect(content().string(containsString("x-user-id=user-123")))
+                .andExpect(content().string(containsString("path=/eventservice/api/events/ping")))
+                .andExpect(content().string(containsString("x-user-id=1")))
                 .andExpect(content().string(containsString("x-user-name=demo")))
                 .andExpect(content().string(containsString("x-user-roles=USER")));
+    }
+
+    @Test
+    void userRouteIsRewrittenToUserServiceApiPrefix() throws Exception {
+        mockMvc.perform(get("/api/users/by-ids?ids=1,2")
+                        .with(jwt().jwt(jwt -> jwt.subject("keycloak-user").claim("preferred_username", "demo"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("path=/userservice/api/users/by-ids")));
+    }
+
+    @Test
+    void interestRouteIsProxiedToUserService() throws Exception {
+        mockMvc.perform(get("/api/interests")
+                        .with(jwt().jwt(jwt -> jwt.subject("keycloak-user").claim("preferred_username", "demo"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("path=/api/interests")));
     }
 
     private static void writeRequestSummary(HttpExchange exchange) throws IOException {

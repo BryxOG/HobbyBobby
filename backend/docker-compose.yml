@@ -11,6 +11,7 @@ services:
       KC_HEALTH_ENABLED: "true"
     volumes:
       - ./keycloak/realm:/opt/keycloak/data/import:ro
+    restart: unless-stopped
 
   kafka:
     image: apache/kafka:3.9.0

@@ -85,8 +85,10 @@ class SecurityConfiguration {
     }
 
     @Bean
-    UserContextHeaderFilter userContextHeaderFilter() {
-        return new UserContextHeaderFilter();
+    UserContextHeaderFilter userContextHeaderFilter(
+            @Value("${gateway.security.fallback-user-id:}") String fallbackUserId
+    ) {
+        return new UserContextHeaderFilter(fallbackUserId);
     }
 
     private static String principalName(Jwt jwt) {
@@ -147,6 +149,11 @@ class SecurityConfiguration {
     }
 
     static class UserContextHeaderFilter extends OncePerRequestFilter {
+        private final String fallbackUserId;
+
+        UserContextHeaderFilter(String fallbackUserId) {
+            this.fallbackUserId = fallbackUserId;
+        }
 
         @Override
         protected void doFilterInternal(
@@ -156,7 +163,7 @@ class SecurityConfiguration {
         ) throws ServletException, IOException {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
-                filterChain.doFilter(new UserContextRequestWrapper(request, jwtAuthentication), response);
+                filterChain.doFilter(new UserContextRequestWrapper(request, jwtAuthentication, fallbackUserId), response);
                 return;
             }
             filterChain.doFilter(request, response);
@@ -168,10 +175,15 @@ class SecurityConfiguration {
         private final String username;
         private final String roles;
 
-        UserContextRequestWrapper(HttpServletRequest request, JwtAuthenticationToken authentication) {
+        UserContextRequestWrapper(
+                HttpServletRequest request,
+                JwtAuthenticationToken authentication,
+                String fallbackUserId
+        ) {
             super(request);
             Jwt jwt = authentication.getToken();
-            this.userId = jwt.getSubject();
+            String applicationUserId = jwt.getClaimAsString("hobbybobby_user_id");
+            this.userId = applicationUserId != null ? applicationUserId : fallbackUserId.isBlank() ? jwt.getSubject() : fallbackUserId;
             this.username = principalName(jwt);
             this.roles = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
