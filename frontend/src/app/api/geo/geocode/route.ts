@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
   const geocode = request.nextUrl.searchParams.get("geocode");
   const lat = request.nextUrl.searchParams.get("lat");
   const lng = request.nextUrl.searchParams.get("lng");
+  const referer =
+    request.headers.get("referer") ??
+    request.headers.get("origin") ??
+    undefined;
 
   try {
     if (lat && lng) {
@@ -17,14 +21,17 @@ export async function GET(request: NextRequest) {
       if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
         return NextResponse.json({ error: "invalid_coords" }, { status: 400 });
       }
-      const place = await reverseGeocode(latNum, lngNum);
+      const place = await reverseGeocode(latNum, lngNum, { referer });
       return NextResponse.json({ place });
     }
 
-    const place = await resolvePlace({
-      uri: uri ?? undefined,
-      geocode: geocode ?? undefined,
-    });
+    const place = await resolvePlace(
+      {
+        uri: uri ?? undefined,
+        geocode: geocode ?? undefined,
+      },
+      { referer },
+    );
     return NextResponse.json({ place });
   } catch (error) {
     const message = error instanceof Error ? error.message : "geocode_failed";

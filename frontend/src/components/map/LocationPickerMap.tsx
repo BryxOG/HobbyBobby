@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import type { EventLocation } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
 import { DEFAULT_ZOOM, FALLBACK_CENTER } from "./mapStyle";
+import { MapLoadError } from "./MapLoadError";
 import {
   detectBrowserCenter,
   loadYandexMapsApi,
-  setMapLocation,
+  resetYandexMapsLoader,
+  type YMapLike,
   type YMaps3Api,
 } from "./yandexMaps";
 
@@ -16,39 +18,72 @@ interface Props {
   onPick: (coords: { lat: number; lng: number }) => void;
 }
 
+/** Есть реальные координаты (не заглушка 0,0). */
+function hasValidCoords(
+  location: EventLocation | null,
+): location is EventLocation {
+  if (!location) return false;
+  if (location.lat === 0 && location.lng === 0) return false;
+  return Number.isFinite(location.lat) && Number.isFinite(location.lng);
+}
+
+/** Пин показываем только когда есть и адрес, и координаты. */
+function isDisplayableLocation(
+  location: EventLocation | null,
+): location is EventLocation {
+  if (!hasValidCoords(location)) return false;
+  return Boolean(location.address.trim());
+}
+
 /**
  * Карта выбора координат для мастера создания ивента.
+ * Родитель перемонтирует компонент через key при выборе нового места.
  */
 export function LocationPickerMap({ value, onPick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ymapsRef = useRef<YMaps3Api | null>(null);
-  const mapRef = useRef<InstanceType<YMaps3Api["YMap"]> | null>(null);
+  const mapRef = useRef<YMapLike | null>(null);
   const markerRef = useRef<unknown | null>(null);
   const onPickRef = useRef(onPick);
-  const hasAutoCentered = useRef(false);
-  const [mapReady, setMapReady] = useState(0);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [mapEpoch, setMapEpoch] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const initialCenter = hasValidCoords(value)
+    ? { lat: value.lat, lng: value.lng }
+    : null;
 
   useEffect(() => {
     onPickRef.current = onPick;
   }, [onPick]);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
 
     let isMounted = true;
+
     void loadYandexMapsApi()
       .then(async (ymaps3) => {
         await ymaps3.ready;
         if (!isMounted || !containerRef.current) return;
+
         ymapsRef.current = ymaps3;
 
-        const browserCenter = await detectBrowserCenter();
-        const center: [number, number] = value
-          ? [value.lng, value.lat]
-          : browserCenter ?? FALLBACK_CENTER;
+        const centerTarget = initialCenter;
+        let center: [number, number];
+        let zoom = DEFAULT_ZOOM;
+
+        if (centerTarget) {
+          center = [centerTarget.lng, centerTarget.lat];
+          zoom = 14;
+        } else {
+          const browserCenter = await detectBrowserCenter();
+          if (!isMounted || !containerRef.current) return;
+          center = browserCenter ?? FALLBACK_CENTER;
+        }
+
         const map = new ymaps3.YMap(containerRef.current, {
-          location: { center, zoom: value ? 13 : DEFAULT_ZOOM },
+          location: { center, zoom },
           behaviors: ["drag", "scrollZoom", "pinchZoom", "dblClick"],
         });
         map.addChild(new ymaps3.YMapDefaultSchemeLayer({}));
@@ -68,14 +103,12 @@ export function LocationPickerMap({ value, onPick }: Props) {
         map.addChild(listener);
         mapRef.current = map;
         setLoadError(null);
-        setMapReady((value) => value + 1);
+        setMapEpoch((epoch) => epoch + 1);
       })
       .catch((error: unknown) => {
         if (!isMounted) return;
         const message =
-          error instanceof Error
-            ? error.message
-            : ru.map.loadError;
+          error instanceof Error ? error.message : ru.map.loadError;
         setLoadError(message);
       });
 
@@ -89,15 +122,16 @@ export function LocationPickerMap({ value, onPick }: Props) {
       mapRef.current = null;
       ymapsRef.current = null;
     };
+    // initialCenter фиксируется при монтировании (родитель меняет key).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     const map = mapRef.current;
     const ymaps3 = ymapsRef.current;
     if (!map || !ymaps3) return;
 
-    if (!value) {
+    if (!isDisplayableLocation(value)) {
       if (markerRef.current) {
         map.removeChild?.(markerRef.current);
       }
@@ -106,38 +140,23 @@ export function LocationPickerMap({ value, onPick }: Props) {
     }
 
     const coordinates: [number, number] = [value.lng, value.lat];
-    if (!markerRef.current) {
-      const el = document.createElement("div");
-      el.className = "hb-me";
-      markerRef.current = new ymaps3.YMapMarker({ coordinates }, el);
-      map.addChild(markerRef.current);
-    } else {
+    if (markerRef.current) {
       map.removeChild?.(markerRef.current);
-      const el = document.createElement("div");
-      el.className = "hb-me";
-      markerRef.current = new ymaps3.YMapMarker({ coordinates }, el);
-      map.addChild(markerRef.current);
     }
+    const el = document.createElement("div");
+    el.className = "hb-me";
+    markerRef.current = new ymaps3.YMapMarker({ coordinates }, el);
+    map.addChild(markerRef.current);
+  }, [value?.lat, value?.lng, value?.address, mapEpoch]);
 
-    if (!hasAutoCentered.current) {
-      setMapLocation(map, { center: coordinates, zoom: 14, duration: 700 });
-      hasAutoCentered.current = true;
-    }
-  }, [value, mapReady]);
+  function retryLoad() {
+    resetYandexMapsLoader();
+    setLoadError(null);
+    setLoadAttempt((n) => n + 1);
+  }
 
   if (loadError) {
-    return (
-      <div className="grid h-56 w-full place-items-center rounded-card bg-surface p-4 text-center">
-        <div className="space-y-1">
-          <p className="text-[14px] font-semibold">{ru.map.loadError}</p>
-          <p className="text-[12px] text-fg-muted">
-            {loadError.includes("NEXT_PUBLIC_YANDEX_MAPS_API_KEY")
-              ? ru.map.noApiKey
-              : loadError}
-          </p>
-        </div>
-      </div>
-    );
+    return <MapLoadError error={loadError} compact onRetry={retryLoad} />;
   }
 
   return <div ref={containerRef} className="h-56 w-full overflow-hidden rounded-card" />;

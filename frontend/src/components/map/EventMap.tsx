@@ -5,9 +5,11 @@ import { getActivity } from "@/lib/activities";
 import type { EventPin, GeoPoint } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
 import { DEFAULT_ZOOM, FALLBACK_CENTER } from "./mapStyle";
+import { MapLoadError } from "./MapLoadError";
 import {
   detectBrowserCenter,
   loadYandexMapsApi,
+  resetYandexMapsLoader,
   setMapLocation,
   type YMaps3Api,
 } from "./yandexMaps";
@@ -38,6 +40,7 @@ export function EventMap({
   const markersRef = useRef(new Map<string, unknown>());
   const markerElementsRef = useRef(new Map<string, HTMLButtonElement>());
   const meMarkerRef = useRef<unknown | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [mapReady, setMapReady] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -97,7 +100,22 @@ export function EventMap({
       meMarkerRef.current = null;
       ymapsRef.current = null;
     };
-  }, [focus, me]);
+  }, [focus, me, loadAttempt]);
+
+  function retryLoad() {
+    resetYandexMapsLoader();
+    for (const marker of markersRef.current.values()) {
+      mapRef.current?.removeChild?.(marker);
+    }
+    markersRef.current.clear();
+    markerElementsRef.current.clear();
+    meMarkerRef.current = null;
+    mapRef.current?.destroy?.();
+    mapRef.current = null;
+    ymapsRef.current = null;
+    setLoadError(null);
+    setLoadAttempt((value) => value + 1);
+  }
 
   // Diff markers: add new pins, drop stale ones, leave the rest untouched.
   useEffect(() => {
@@ -189,18 +207,7 @@ export function EventMap({
   }, [me, mapReady]);
 
   if (loadError) {
-    return (
-      <div className="grid size-full place-items-center bg-surface p-4 text-center">
-        <div className="space-y-2">
-          <p className="text-[15px] font-semibold">{ru.map.loadError}</p>
-          <p className="text-[13px] text-fg-muted">
-            {loadError.includes("NEXT_PUBLIC_YANDEX_MAPS_API_KEY")
-              ? ru.map.noApiKey
-              : loadError}
-          </p>
-        </div>
-      </div>
-    );
+    return <MapLoadError error={loadError} onRetry={retryLoad} />;
   }
 
   return <div ref={containerRef} className="size-full" />;
