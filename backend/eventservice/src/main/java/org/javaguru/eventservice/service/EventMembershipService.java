@@ -54,7 +54,10 @@ public class EventMembershipService {
      */
     @Transactional
     public void leave(String eventId, Long userId) {
-        requireEvent(eventId);
+        EventEntity event = requireEvent(eventId);
+        if (event.getOrganizerId().equals(userId)) {
+            throw new ConflictException("ORGANIZER_CANNOT_LEAVE");
+        }
         participantRepository.deleteById(new EventParticipantId(eventId, userId));
     }
 

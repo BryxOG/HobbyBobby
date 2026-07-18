@@ -1,6 +1,6 @@
-### Events API (EventService :9001)
+### Events API (EventService :9011)
 
-@baseUrl = http://localhost:9001/eventservice/api
+@baseUrl = http://localhost:9011/eventservice/api
 @userId = 1
 
 ### Список ивентов
@@ -30,6 +30,16 @@ X-User-Id: {{userId}}
 ### Котировка публикации
 GET {{baseUrl}}/events/publish-quote
 X-User-Id: {{userId}}
+
+### NL-парсер v1 (правила)
+POST {{baseUrl}}/events/search/parse
+Content-Type: application/json
+
+{
+  "query": "найди седня или завтра футбик в москоу",
+  "userLat": null,
+  "userLng": null
+}
 
 ### Создать ивент
 POST {{baseUrl}}/events
@@ -62,3 +72,23 @@ X-User-Id: {{userId}}
 ### Отменить ивент (только организатор)
 POST {{baseUrl}}/events/e-basketball-1/cancel
 X-User-Id: {{userId}}
+
+### Редактировать ивент (только организатор)
+PUT {{baseUrl}}/events/e-basketball-1
+X-User-Id: {{userId}}
+Content-Type: application/json
+
+{
+  "title": "Баскетбол 3х3 — обновлено",
+  "activityId": "basketball",
+  "description": "Обновлённое описание",
+  "startsAt": "2026-08-01T18:00:00.000Z",
+  "endsAt": "2026-08-01T20:00:00.000Z",
+  "location": {
+    "lat": 55.7558,
+    "lng": 37.6173,
+    "address": "Лужники"
+  },
+  "capacity": 8,
+  "tagIds": ["t-friendly"]
+}

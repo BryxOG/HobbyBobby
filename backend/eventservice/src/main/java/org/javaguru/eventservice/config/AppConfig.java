@@ -1,5 +1,7 @@
 package org.javaguru.eventservice.config;
 
+import java.time.Clock;
+import org.javaguru.eventservice.search.RuleBasedSearchIntentParser;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +15,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 @EnableConfigurationProperties({UserServiceProperties.class, ChatProperties.class, EventNotificationProperties.class})
 public class AppConfig implements WebMvcConfigurer {
+
+    /**
+     * Часы приложения (Europe/Moscow) — для NL-дат «сегодня/завтра».
+     *
+     * @return clock
+     */
+    @Bean
+    public Clock clock() {
+        return Clock.system(RuleBasedSearchIntentParser.ZONE);
+    }
 
     /**
      * HTTP-клиент для вызовов UserService.

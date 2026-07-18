@@ -9,13 +9,15 @@
 # EventService: http://localhost:9001/eventservice/api
 # UserService:  http://localhost:9002/userservice/api
 # WebSocket:    ws://localhost:9003/ws
+#
+# Postgres на хосте: localhost:5433 (внутри сети Docker — postgres:5432)
 
 services:
   postgres:
     image: postgres:17-alpine
     container_name: hobbybobby-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hobbybobby}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hobbybobby}

@@ -3,7 +3,6 @@ package org.javaguru.eventservice.repository;
 import java.time.Instant;
 import java.util.List;
 import org.javaguru.eventservice.entity.EventEntity;
-import org.javaguru.eventservice.entity.EventStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,6 +39,22 @@ public interface EventRepository extends JpaRepository<EventEntity, String> {
      * @return список ивентов
      */
     List<EventEntity> findAllByOrderByStartsAtAsc();
+
+    /**
+     * Полнотекстовый поиск по search_vector (Postgres FTS).
+     * Ранжирует по ts_rank, при равном ранге — по дате начала.
+     *
+     * @param tsQuery выражение to_tsquery (например football:* & парк:*)
+     * @return id подходящих ивентов
+     */
+    @Query(value = """
+            SELECT e.id
+            FROM events e
+            WHERE e.search_vector @@ to_tsquery('simple', :tsQuery)
+            ORDER BY ts_rank(e.search_vector, to_tsquery('simple', :tsQuery)) DESC,
+                     e.starts_at ASC
+            """, nativeQuery = true)
+    List<String> findIdsByFullText(@Param("tsQuery") String tsQuery);
 
     /**
      * Возвращает активные ивенты, для которых пора отправить напоминание.

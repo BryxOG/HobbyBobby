@@ -56,14 +56,14 @@ export const ru = {
 
   events: {
     title: "Ивенты",
-    searchPlaceholder: "Поиск по ивентам",
+    searchPlaceholder: "сегодня футбол в Москве",
     createdBy: "Создал(а)",
     description: "Описание",
     dateTime: "Дата и время",
     participants: "Участвуют",
     participantsList: "Участники",
     join: "Участвовать",
-    leave: "Отменить",
+    leave: "Покинуть",
     full: "Мест нет",
     joined: "Вы участвуете",
     lastEvent: "Последнее событие",
@@ -73,10 +73,16 @@ export const ru = {
     cancelEvent: "Отменить ивент",
     cancelled: "Ивент отменён",
     cancelledHint: "Организатор отменил это событие",
+    editEvent: "Редактировать",
+    editTitle: "Редактирование",
+    saveChanges: "Сохранить изменения",
+    saving: "Сохраняем…",
+    errorCapacity: "Вместимость не меньше числа участников",
     loadMore: "Показать ещё",
     myEvents: "Мои ивенты",
     emptyMine: "У вас пока нет ивентов",
     emptyMineHint: "Создайте свой или вступите в существующий",
+    interpreted: "Поняли как",
   },
 
   create: {

@@ -1,5 +1,5 @@
 plugins {
-    java
+    `java-library`
 }
 
 group = "org.javaguru"

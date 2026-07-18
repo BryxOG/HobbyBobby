@@ -3,9 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ACTIVITIES } from "@/lib/activities";
-import { useEvents, useMyEventsFeed } from "@/lib/api/hooks";
+import {
+  toEventListQuery,
+  useEvents,
+  useMyEvents,
+  useParseSearch,
+} from "@/lib/api/hooks";
 import { USING_MOCKS } from "@/lib/api/client";
-import type { ActivityId } from "@/lib/api/types";
+import type { ActivityId, MyEventsScope } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
 import { useAuth } from "@/lib/stores/auth";
 import { useDebounced } from "@/lib/useDebounced";
@@ -14,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Header } from "@/components/ui/Header";
 import { SearchField } from "@/components/ui/SearchField";
+import { Segmented } from "@/components/ui/Segmented";
 import {
   EmptyState,
   ErrorState,
@@ -28,17 +34,36 @@ export default function EventsPage() {
   const isLoggedIn = USING_MOCKS || Boolean(userId);
 
   const [feedMode, setFeedMode] = useState<FeedMode>("all");
+  const [mineScope, setMineScope] = useState<MyEventsScope>("organizing");
   const [search, setSearch] = useState("");
   const [activities, setActivities] = useState<ActivityId[]>([]);
   const query = useDebounced(search);
 
+  const { data: intent } = useParseSearch(query, query.trim().length >= 2);
+
   const filters = useMemo(
-    () => ({ query, activityIds: activities }),
-    [query, activities],
+    () => toEventListQuery(activities, query),
+    [activities, query],
   );
 
+  const interpretationChips = useMemo(() => {
+    if (!intent?.interpretedAs) return [];
+    return [intent.interpretedAs.when, intent.interpretedAs.what, intent.interpretedAs.where]
+      .filter((label): label is string => Boolean(label && label.trim()));
+  }, [intent]);
+
   const allEvents = useEvents(filters, feedMode === "all");
-  const myEvents = useMyEventsFeed(filters, feedMode === "mine");
+  const organizing = useMyEvents(
+    "organizing",
+    filters,
+    feedMode === "mine" && mineScope === "organizing",
+  );
+  const participating = useMyEvents(
+    "participating",
+    filters,
+    feedMode === "mine" && mineScope === "participating",
+  );
+
   const {
     data,
     isPending,
@@ -47,7 +72,12 @@ export default function EventsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = feedMode === "all" ? allEvents : myEvents;
+  } =
+    feedMode === "all"
+      ? allEvents
+      : mineScope === "organizing"
+        ? organizing
+        : participating;
 
   const events = data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -70,6 +100,16 @@ export default function EventsPage() {
     );
   }
 
+  const emptyTitle =
+    feedMode === "mine"
+      ? mineScope === "organizing"
+        ? ru.myEvents.emptyOrganizing
+        : ru.myEvents.emptyParticipating
+      : ru.events.empty;
+
+  const emptyHint =
+    feedMode === "mine" ? ru.events.emptyMineHint : ru.events.emptyHint;
+
   return (
     <>
       <Header title={ru.events.title} large />
@@ -80,6 +120,17 @@ export default function EventsPage() {
           onChange={setSearch}
           placeholder={ru.events.searchPlaceholder}
         />
+
+        {interpretationChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--muted)]">{ru.events.interpreted}</span>
+            {interpretationChips.map((label) => (
+              <Chip key={label} selected>
+                {label}
+              </Chip>
+            ))}
+          </div>
+        )}
 
         {/* Bleed to the screen edges so the row reads as scrollable. */}
         <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -105,6 +156,18 @@ export default function EventsPage() {
             ))}
           </div>
         </div>
+
+        {feedMode === "mine" && (
+          <Segmented
+            label={ru.events.myEvents}
+            value={mineScope}
+            onChange={setMineScope}
+            options={[
+              { value: "organizing", label: ru.myEvents.organizing },
+              { value: "participating", label: ru.myEvents.participating },
+            ]}
+          />
+        )}
       </div>
 
       <main className="flex-1 space-y-2 px-4 py-3">
@@ -112,16 +175,7 @@ export default function EventsPage() {
         {isError && <ErrorState onRetry={() => refetch()} />}
 
         {!isPending && !isError && events.length === 0 && (
-          <EmptyState
-            title={
-              feedMode === "mine" ? ru.events.emptyMine : ru.events.empty
-            }
-            hint={
-              feedMode === "mine"
-                ? ru.events.emptyMineHint
-                : ru.events.emptyHint
-            }
-          />
+          <EmptyState title={emptyTitle} hint={emptyHint} />
         )}
 
         {events.map((event) => (

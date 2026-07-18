@@ -13,3 +13,7 @@ databaseChangeLog:
       file: db/changelog/changes/006-insert-tags-test-data.yaml
   - include:
       file: db/changelog/changes/007-add-event-notification-fields.yaml
+  - include:
+      file: db/changelog/changes/008-add-event-search-vector.yaml
+  - include:
+      file: db/changelog/changes/009-refresh-bar-search-synonyms.yaml

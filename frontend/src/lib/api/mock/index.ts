@@ -153,6 +153,27 @@ export const mockClient: ApiClient = {
       return latency(clone(event), 600); // Publishing feels like work.
     },
 
+    async update(id, input) {
+      const event = findEvent(id);
+      if (event.status === "CANCELLED") {
+        throw new Error("Нельзя редактировать отменённый ивент");
+      }
+      if (input.capacity < event.participants.length) {
+        throw new Error("Вместимость меньше числа участников");
+      }
+      event.title = input.title;
+      event.activityId = input.activityId;
+      event.description = input.description;
+      event.startsAt = input.startsAt;
+      event.endsAt = input.endsAt;
+      event.location = input.location;
+      event.capacity = input.capacity;
+      event.tags = input.tagIds
+        .map((tagId) => db.tags.find((t) => t.id === tagId))
+        .filter((t): t is NonNullable<typeof t> => Boolean(t));
+      return latency(clone(event));
+    },
+
     async join(id) {
       const event = findEvent(id);
       if (event.participants.length >= event.capacity) {
@@ -185,6 +206,25 @@ export const mockClient: ApiClient = {
       event.status = "CANCELLED";
       event.cancelledAt = new Date().toISOString();
       return latency(clone(event));
+    },
+
+    async parseSearch(input) {
+      return latency({
+        rawQuery: input.query,
+        activityIds: [],
+        from: null,
+        to: null,
+        near:
+          input.userLat != null && input.userLng != null
+            ? { lat: input.userLat, lng: input.userLng }
+            : null,
+        radiusKm: null,
+        city: null,
+        tagIds: [],
+        freeText: input.query.trim() || null,
+        interpretedAs: { when: null, what: null, where: null },
+        confidence: 0.2,
+      });
     },
   },
 

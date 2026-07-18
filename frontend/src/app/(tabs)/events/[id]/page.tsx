@@ -148,14 +148,22 @@ export default function EventDetailPage({
         </section>
 
         {isOrganizer && !isCancelled && (
-          <Button
-            variant="danger"
-            fullWidth
-            loading={cancelEvent.isPending}
-            onClick={() => cancelEvent.mutate(event.id)}
-          >
-            {ru.events.cancelEvent}
-          </Button>
+          <div className="space-y-3">
+            <Link
+              href={`/events/${event.id}/edit`}
+              className="flex items-center justify-center rounded-card bg-surface py-3 text-[15px] font-semibold text-primary active:bg-elevated"
+            >
+              {ru.events.editEvent}
+            </Link>
+            <Button
+              variant="danger"
+              fullWidth
+              loading={cancelEvent.isPending}
+              onClick={() => cancelEvent.mutate(event.id)}
+            >
+              {ru.events.cancelEvent}
+            </Button>
+          </div>
         )}
 
         {event.isJoined && !isCancelled && (
@@ -168,7 +176,7 @@ export default function EventDetailPage({
         )}
       </main>
 
-      {!isCancelled && (
+      {!isCancelled && !isOrganizer && (
         <div className="sticky bottom-0 border-t border-border bg-bg/85 px-4 py-3 backdrop-blur-xl">
           <JoinButton event={event} size="lg" fullWidth />
         </div>

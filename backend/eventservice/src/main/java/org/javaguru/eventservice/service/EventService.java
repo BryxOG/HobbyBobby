@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +36,9 @@ import org.javaguru.eventservice.repository.EventParticipantRepository;
 import org.javaguru.eventservice.repository.EventRepository;
 import org.javaguru.eventservice.repository.EventTagRepository;
 import org.javaguru.eventservice.repository.TagRepository;
+import org.javaguru.eventservice.search.FullTextQueryBuilder;
+import org.javaguru.eventservice.search.RuleBasedSearchIntentParser;
+import org.javaguru.eventservice.dto.SearchIntentResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +59,7 @@ public class EventService {
     private final UserServiceClient userServiceClient;
     private final EventMapper eventMapper;
     private final EventNotificationProducer notificationProducer;
+    private final RuleBasedSearchIntentParser searchIntentParser;
 
     /**
      * Возвращает страницу ивентов с фильтрами.
@@ -86,10 +91,7 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
-        List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc().stream()
-                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
-                        .toList(),
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -98,6 +100,19 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         return paginate(filtered, currentUserId, cursor, limit);
     }
@@ -139,8 +154,7 @@ public class EventService {
                 .filter(event -> matchesScope(event, currentUserId, scope))
                 .sorted(Comparator.comparing(EventEntity::getStartsAt))
                 .toList();
-        List<EventEntity> filtered = filterEvents(
-                scoped,
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -149,6 +163,17 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                scoped,
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         return paginate(filtered, currentUserId, cursor, limit);
     }
@@ -194,6 +219,47 @@ public class EventService {
                 recipients
         ));
         return toResponses(List.of(entity), currentUserId).getFirst();
+    }
+
+    /**
+     * Обновляет ивент организатором.
+     *
+     * @param eventId       идентификатор ивента
+     * @param request       новые поля
+     * @param currentUserId текущий пользователь
+     * @return обновлённая карточка
+     */
+    @Transactional
+    public EventResponse update(String eventId, CreateEventRequest request, Long currentUserId) {
+        EventEntity entity = requireEvent(eventId);
+        if (!entity.getOrganizerId().equals(currentUserId)) {
+            throw new ForbiddenException("Только организатор может редактировать ивент");
+        }
+        if (entity.getStatus() == EventStatus.CANCELLED) {
+            throw new ConflictException("Нельзя редактировать отменённый ивент");
+        }
+        if (!request.endsAt().isAfter(request.startsAt())) {
+            throw new ConflictException("Время окончания должно быть позже начала");
+        }
+        int participants = participantRepository.findUserIdsByEventId(eventId).size();
+        if (request.capacity() < participants) {
+            throw new ConflictException("Вместимость меньше числа участников");
+        }
+
+        entity.setTitle(request.title().trim());
+        entity.setActivityId(request.activityId());
+        entity.setDescription(request.description().trim());
+        entity.setStartsAt(request.startsAt());
+        entity.setEndsAt(request.endsAt());
+        entity.setLat(request.location().lat());
+        entity.setLng(request.location().lng());
+        entity.setAddress(request.location().address().trim());
+        entity.setCapacity(request.capacity());
+
+        eventRepository.save(entity);
+        replaceTags(entity.getId(), request.tagIds());
+
+        return getById(entity.getId(), currentUserId);
     }
 
     /**
@@ -257,10 +323,7 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
-        List<EventEntity> filtered = filterEvents(
-                eventRepository.findAllByOrderByStartsAtAsc().stream()
-                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
-                        .toList(),
+        ResolvedFilters resolved = resolveFilters(
                 query,
                 activityIds,
                 tagIds,
@@ -269,6 +332,19 @@ public class EventService {
                 nearLat,
                 nearLng,
                 radiusKm
+        );
+        List<EventEntity> filtered = filterEvents(
+                eventRepository.findAllByOrderByStartsAtAsc().stream()
+                        .filter(event -> event.getStatus() == EventStatus.ACTIVE)
+                        .toList(),
+                resolved.query(),
+                resolved.activityIds(),
+                resolved.tagIds(),
+                resolved.from(),
+                resolved.to(),
+                resolved.nearLat(),
+                resolved.nearLng(),
+                resolved.radiusKm()
         );
         Map<String, Integer> counts = participantCounts(filtered);
         return filtered.stream()
@@ -450,19 +526,76 @@ public class EventService {
     }
 
     /**
-     * Фильтрует ивенты по параметрам ленты.
+     * Полностью заменяет теги ивента.
      *
-     * @param source      исходный список
-     * @param query       текст
-     * @param activityIds типы
-     * @param tagIds      теги
-     * @param from        дата от
-     * @param to          дата до
-     * @param nearLat     широта
-     * @param nearLng     долгота
-     * @param radiusKm    радиус
-     * @return отфильтрованный список
+     * @param eventId идентификатор ивента
+     * @param tagIds  новые идентификаторы тегов
      */
+    private void replaceTags(String eventId, List<String> tagIds) {
+        eventTagRepository.deleteByIdEventId(eventId);
+        saveTags(eventId, tagIds);
+    }
+
+    /**
+     * Если в query пришла NL-строка («найди завтра футбик»), разбирает её правилами
+     * и подставляет activity/from/to/geo; для FTS остаётся только freeText.
+     */
+    private ResolvedFilters resolveFilters(
+            String query,
+            List<String> activityIds,
+            List<String> tagIds,
+            Instant from,
+            Instant to,
+            Double nearLat,
+            Double nearLng,
+            Double radiusKm
+    ) {
+        if (query == null || query.isBlank()) {
+            return new ResolvedFilters(null, activityIds, tagIds, from, to, nearLat, nearLng, radiusKm);
+        }
+
+        SearchIntentResponse intent = searchIntentParser.parse(query, nearLat, nearLng);
+
+        List<String> resolvedActivities = (activityIds == null || activityIds.isEmpty())
+                ? intent.activityIds()
+                : activityIds;
+        Instant resolvedFrom = from != null ? from : intent.from();
+        Instant resolvedTo = to != null ? to : intent.to();
+        Double resolvedLat = nearLat;
+        Double resolvedLng = nearLng;
+        Double resolvedRadius = radiusKm;
+        if (resolvedLat == null && intent.near() != null) {
+            resolvedLat = intent.near().lat();
+            resolvedLng = intent.near().lng();
+        }
+        if (resolvedRadius == null) {
+            resolvedRadius = intent.radiusKm();
+        }
+
+        return new ResolvedFilters(
+                intent.freeText(),
+                resolvedActivities,
+                tagIds,
+                resolvedFrom,
+                resolvedTo,
+                resolvedLat,
+                resolvedLng,
+                resolvedRadius
+        );
+    }
+
+    private record ResolvedFilters(
+            String query,
+            List<String> activityIds,
+            List<String> tagIds,
+            Instant from,
+            Instant to,
+            Double nearLat,
+            Double nearLng,
+            Double radiusKm
+    ) {
+    }
+
     private List<EventEntity> filterEvents(
             List<EventEntity> source,
             String query,
@@ -474,12 +607,12 @@ public class EventService {
             Double nearLng,
             Double radiusKm
     ) {
+        List<EventEntity> ftsOrdered = applyFullTextSearch(source, query);
         Map<String, List<TagResponse>> tagsByEvent = tagIds != null && !tagIds.isEmpty()
-                ? loadTags(source.stream().map(EventEntity::getId).toList())
+                ? loadTags(ftsOrdered.stream().map(EventEntity::getId).toList())
                 : Map.of();
 
-        return source.stream()
-                .filter(event -> matchesText(event, query))
+        return ftsOrdered.stream()
                 .filter(event -> activityIds == null || activityIds.isEmpty()
                         || activityIds.contains(event.getActivityId()))
                 .filter(event -> tagIds == null || tagIds.isEmpty()
@@ -492,29 +625,38 @@ public class EventService {
     }
 
     /**
-     * Проверяет текстовый поиск по ивенту.
+     * Фильтрует и сортирует ивенты через Postgres FTS ({@code search_vector}).
+     * Без запроса возвращает исходный список без изменений.
      *
-     * @param event сущность
-     * @param query строка поиска
-     * @return true, если подходит
+     * @param source исходный список
+     * @param query  строка поиска
+     * @return отфильтрованный список в порядке релевантности FTS
      */
-    private boolean matchesText(EventEntity event, String query) {
-        if (query == null || query.isBlank()) {
-            return true;
+    private List<EventEntity> applyFullTextSearch(List<EventEntity> source, String query) {
+        String tsQuery = FullTextQueryBuilder.toTsQuery(query);
+        if (tsQuery == null) {
+            return source;
         }
-        String haystack = String.join(" ",
-                event.getTitle(),
-                event.getDescription(),
-                event.getAddress(),
-                event.getActivityId()
-        ).toLowerCase();
-        String[] words = query.trim().toLowerCase().split("\\s+");
-        for (String word : words) {
-            if (!haystack.contains(word)) {
-                return false;
+        if (source.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> rankedIds = eventRepository.findIdsByFullText(tsQuery);
+        if (rankedIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, EventEntity> byId = source.stream()
+                .collect(Collectors.toMap(EventEntity::getId, event -> event, (a, b) -> a, LinkedHashMap::new));
+
+        List<EventEntity> matched = new ArrayList<>();
+        for (String id : rankedIds) {
+            EventEntity event = byId.get(id);
+            if (event != null) {
+                matched.add(event);
             }
         }
-        return true;
+        return matched;
     }
 
     /**

@@ -6,8 +6,8 @@ import { ru } from "@/lib/i18n/ru";
 import { Button } from "@/components/ui/Button";
 
 /**
- * The sketch's "Участвовать" ↔ "Отменить" toggle. Green when joinable, red when
- * already in — the two states are different colours, not one restyled button.
+ * «Участвовать» ↔ «Покинуть». Организатор эту кнопку не видит —
+ * выйти нельзя, только отменить ивент целиком.
  */
 export function JoinButton({
   event,
