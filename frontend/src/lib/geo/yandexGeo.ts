@@ -37,19 +37,60 @@ interface GeocodeResponse {
 }
 
 /**
- * Возвращает API-ключ Яндекс Карт из окружения.
+ * Возвращает API-ключ HTTP Геокодера из окружения (только сервер).
  */
-export function getYandexApiKey(): string {
-  const key = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
+function getYandexGeocoderApiKey(): string {
+  const key = process.env.YANDEX_GEOCODER_API_KEY;
   if (!key) {
-    throw new Error("Не задан NEXT_PUBLIC_YANDEX_MAPS_API_KEY");
+    throw new Error("Не задан YANDEX_GEOCODER_API_KEY");
   }
   return key;
 }
 
 /**
- * Запрашивает подсказки мест по префиксу пользовательского ввода.
+ * Возвращает API-ключ HTTP Геосаджеста из окружения.
  */
+function getYandexSuggestApiKey(): string {
+  const key = process.env.NEXT_PUBLIC_YANDEX_SUGGEST_API_KEY;
+  if (!key) {
+    throw new Error("Не задан NEXT_PUBLIC_YANDEX_SUGGEST_API_KEY");
+  }
+  return key;
+}
+
+/**
+ * Заголовки для HTTP Геокодера: ключ с ограничением по домену требует Referer.
+ */
+function getGeocoderRequestHeaders(referer?: string): HeadersInit {
+  const resolvedReferer =
+    referer?.trim() ||
+    process.env.YANDEX_GEOCODER_REFERER?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "http://localhost:3000";
+
+  return { Referer: resolvedReferer };
+}
+
+/**
+ * Выполняет запрос к HTTP Геокодеру и возвращает разобранный ответ.
+ */
+async function fetchGeocoder(
+  params: URLSearchParams,
+  referer?: string,
+): Promise<GeocodeResponse> {
+  const response = await fetch(`${GEOCODE_URL}?${params.toString()}`, {
+    headers: getGeocoderRequestHeaders(referer),
+  });
+
+  if (!response.ok) {
+    const details = (await response.text()).trim();
+    const suffix = details ? `: ${details.slice(0, 200)}` : "";
+    throw new Error(`Geocoder API: ${response.status}${suffix}`);
+  }
+
+  return (await response.json()) as GeocodeResponse;
+}
+
 export async function suggestPlaces(
   text: string,
   options: SuggestOptions,
@@ -58,7 +99,7 @@ export async function suggestPlaces(
   if (query.length < 2) return [];
 
   const params = new URLSearchParams({
-    apikey: getYandexApiKey(),
+    apikey: getYandexSuggestApiKey(),
     text: query,
     lang: "ru",
     results: "7",
@@ -90,12 +131,15 @@ export async function suggestPlaces(
 /**
  * Разрешает подсказку или текстовый адрес в координаты и строку адреса.
  */
-export async function resolvePlace(input: {
-  uri?: string | null;
-  geocode?: string;
-}): Promise<ResolvedPlace | null> {
+export async function resolvePlace(
+  input: {
+    uri?: string | null;
+    geocode?: string;
+  },
+  options?: { referer?: string },
+): Promise<ResolvedPlace | null> {
   const params = new URLSearchParams({
-    apikey: getYandexApiKey(),
+    apikey: getYandexGeocoderApiKey(),
     lang: "ru_RU",
     format: "json",
     results: "1",
@@ -109,21 +153,20 @@ export async function resolvePlace(input: {
     return null;
   }
 
-  const response = await fetch(`${GEOCODE_URL}?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error(`Geocoder API: ${response.status}`);
-  }
-
-  const data = (await response.json()) as GeocodeResponse;
+  const data = await fetchGeocoder(params, options?.referer);
   return parseGeocodeResult(data);
 }
 
 /**
  * Обратный геокодинг: координаты → адрес.
  */
-export async function reverseGeocode(lat: number, lng: number): Promise<ResolvedPlace | null> {
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+  options?: { referer?: string },
+): Promise<ResolvedPlace | null> {
   const params = new URLSearchParams({
-    apikey: getYandexApiKey(),
+    apikey: getYandexGeocoderApiKey(),
     geocode: `${lng},${lat}`,
     lang: "ru_RU",
     format: "json",
@@ -131,12 +174,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Resolved
     kind: "house",
   });
 
-  const response = await fetch(`${GEOCODE_URL}?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error(`Geocoder API: ${response.status}`);
-  }
-
-  const data = (await response.json()) as GeocodeResponse;
+  const data = await fetchGeocoder(params, options?.referer);
   const resolved = parseGeocodeResult(data);
   if (resolved) return resolved;
 

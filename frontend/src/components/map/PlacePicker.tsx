@@ -32,6 +32,10 @@ export function PlacePicker({
 }: Props) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geocodeRequestRef = useRef(0);
+  const skipBlurGeocodeRef = useRef(false);
+  const draftRef = useRef(value?.address ?? "");
   const [sessionToken] = useState(() => crypto.randomUUID());
 
   const [focused, setFocused] = useState(false);
@@ -58,22 +62,76 @@ export function PlacePicker({
     (suggestionsQuery.isFetching || suggestions.length > 0 || suggestionsQuery.isError);
 
   useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      if (geocodeTimerRef.current) {
+        clearTimeout(geocodeTimerRef.current);
+      }
+    };
   }, []);
 
+  function clearGeocodeTimer() {
+    if (geocodeTimerRef.current) {
+      clearTimeout(geocodeTimerRef.current);
+      geocodeTimerRef.current = null;
+    }
+  }
+
+  async function geocodeDraft(text: string) {
+    const query = text.trim();
+    if (query.length < 3) return;
+
+    const requestId = ++geocodeRequestRef.current;
+    setResolving(true);
+    setResolveError(null);
+    try {
+      const place = await resolvePlaceByAddress(query);
+      if (requestId !== geocodeRequestRef.current) return;
+      if (!place) {
+        setResolveError(ru.create.placeResolveError);
+        return;
+      }
+      setDraft(place.address);
+      onChange(place);
+      setActiveIndex(-1);
+    } catch {
+      if (requestId === geocodeRequestRef.current) {
+        setResolveError(ru.create.placeResolveError);
+      }
+    } finally {
+      if (requestId === geocodeRequestRef.current) {
+        setResolving(false);
+      }
+    }
+  }
+
+  function scheduleGeocode(text: string) {
+    clearGeocodeTimer();
+    geocodeTimerRef.current = setTimeout(() => {
+      void geocodeDraft(text);
+    }, 500);
+  }
+
   async function pickSuggestion(item: PlaceSuggestion) {
+    clearGeocodeTimer();
+    const requestId = ++geocodeRequestRef.current;
     setResolving(true);
     setResolveError(null);
     try {
       const place = item.uri
         ? await resolvePlaceByUri(item.uri)
         : await resolvePlaceByAddress(item.title);
+      if (requestId !== geocodeRequestRef.current) return;
       if (!place) {
         setResolveError(ru.create.placeResolveError);
         return;
@@ -83,9 +141,14 @@ export function PlacePicker({
       setOpen(false);
       setActiveIndex(-1);
     } catch {
-      setResolveError(ru.create.placeResolveError);
+      if (requestId === geocodeRequestRef.current) {
+        setResolveError(ru.create.placeResolveError);
+      }
     } finally {
-      setResolving(false);
+      if (requestId === geocodeRequestRef.current) {
+        setResolving(false);
+      }
+      skipBlurGeocodeRef.current = false;
     }
   }
 
@@ -94,11 +157,13 @@ export function PlacePicker({
     setOpen(true);
     setResolveError(null);
     setActiveIndex(-1);
+    // Сбрасываем координаты, пока место не выбрано из подсказок или не геокодировано.
     onChange({
-      lat: value?.lat ?? near?.lat ?? 55.7558,
-      lng: value?.lng ?? near?.lng ?? 37.6173,
+      lat: 0,
+      lng: 0,
       address: next,
     });
+    scheduleGeocode(next);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -112,6 +177,7 @@ export function PlacePicker({
       setActiveIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
     } else if (event.key === "Enter" && activeIndex >= 0) {
       event.preventDefault();
+      skipBlurGeocodeRef.current = true;
       void pickSuggestion(suggestions[activeIndex]);
     } else if (event.key === "Escape") {
       setOpen(false);
@@ -140,6 +206,9 @@ export function PlacePicker({
         onBlur={() => {
           setFocused(false);
           setOpen(false);
+          clearGeocodeTimer();
+          if (skipBlurGeocodeRef.current) return;
+          void geocodeDraft(draftRef.current);
         }}
         onChange={(e) => onInputChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -175,8 +244,11 @@ export function PlacePicker({
                   "w-full px-3 py-2 text-left",
                   index === activeIndex ? "bg-surface" : "hover:bg-surface/80",
                 )}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => void pickSuggestion(item)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  skipBlurGeocodeRef.current = true;
+                  void pickSuggestion(item);
+                }}
               >
                 <p className="truncate text-[15px] font-medium">{item.title}</p>
                 {item.subtitle && (
