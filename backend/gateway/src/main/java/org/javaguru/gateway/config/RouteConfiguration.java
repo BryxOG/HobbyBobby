@@ -15,7 +15,10 @@ import static org.springframework.cloud.gateway.server.mvc.predicate.GatewayRequ
 class RouteConfiguration {
 
     @Bean
-    RouterFunction<ServerResponse> gatewayRoutes(GatewayRouteProperties properties) {
+    RouterFunction<ServerResponse> gatewayRoutes(
+            GatewayRouteProperties properties,
+            UserContextBeforeFilter userContextBeforeFilter
+    ) {
         return route("event-service")
                 .route(
                         path(
@@ -26,11 +29,13 @@ class RouteConfiguration {
                         ),
                         http()
                 )
+                .before(userContextBeforeFilter)
                 .before(rewritePath("/api/(?<segment>.*)", "/eventservice/api/${segment}"))
                 .before(uri(properties.eventServiceUrl()))
                 .build()
                 .and(route("user-service")
                         .route(path("/api/users/**"), http())
+                        .before(userContextBeforeFilter)
                         .before(rewritePath("/api/(?<segment>.*)", "/userservice/api/${segment}"))
                         .before(uri(properties.userServiceUrl()))
                         .build());

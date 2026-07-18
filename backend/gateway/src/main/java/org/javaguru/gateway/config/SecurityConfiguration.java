@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 @Configuration
 class SecurityConfiguration {
 
+    static final String HOBBYBOBBY_USER_ID_CLAIM = "hobbybobby_user_id";
+
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -85,13 +87,65 @@ class SecurityConfiguration {
     }
 
     @Bean
-    UserContextHeaderFilter userContextHeaderFilter() {
-        return new UserContextHeaderFilter();
+    UserContextHeaderFilter userContextHeaderFilter(GatewayIdentityProperties identityProperties) {
+        return new UserContextHeaderFilter(identityProperties);
     }
 
     private static String principalName(Jwt jwt) {
         String preferredUsername = jwt.getClaimAsString("preferred_username");
         return preferredUsername != null ? preferredUsername : jwt.getSubject();
+    }
+
+    /**
+     * Резолвит числовой domain user id (resolveUserId — «разрешить id пользователя»).
+     * Порядок: claim hobbybobby_user_id → map по preferred_username → numeric subject.
+     */
+    static String resolveUserId(Jwt jwt, Map<String, String> userIdByUsername) {
+        String fromClaim = claimAsSingleString(jwt, HOBBYBOBBY_USER_ID_CLAIM);
+        if (isNumericUserId(fromClaim)) {
+            return fromClaim;
+        }
+
+        String preferredUsername = jwt.getClaimAsString("preferred_username");
+        if (preferredUsername != null) {
+            String mapped = userIdByUsername.get(preferredUsername);
+            if (isNumericUserId(mapped)) {
+                return mapped;
+            }
+        }
+
+        String subject = jwt.getSubject();
+        if (isNumericUserId(subject)) {
+            return subject;
+        }
+        return subject;
+    }
+
+    private static String claimAsSingleString(Jwt jwt, String claimName) {
+        Object value = jwt.getClaim(claimName);
+        if (value instanceof String stringValue) {
+            return stringValue;
+        }
+        if (value instanceof Collection<?> collection && !collection.isEmpty()) {
+            Object first = collection.iterator().next();
+            return first == null ? null : first.toString();
+        }
+        if (value instanceof Number number) {
+            return Long.toString(number.longValue());
+        }
+        return null;
+    }
+
+    private static boolean isNumericUserId(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (!Character.isDigit(value.charAt(index))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
@@ -148,6 +202,12 @@ class SecurityConfiguration {
 
     static class UserContextHeaderFilter extends OncePerRequestFilter {
 
+        private final GatewayIdentityProperties identityProperties;
+
+        UserContextHeaderFilter(GatewayIdentityProperties identityProperties) {
+            this.identityProperties = identityProperties;
+        }
+
         @Override
         protected void doFilterInternal(
                 HttpServletRequest request,
@@ -156,7 +216,10 @@ class SecurityConfiguration {
         ) throws ServletException, IOException {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
-                filterChain.doFilter(new UserContextRequestWrapper(request, jwtAuthentication), response);
+                filterChain.doFilter(
+                        new UserContextRequestWrapper(request, jwtAuthentication, identityProperties),
+                        response
+                );
                 return;
             }
             filterChain.doFilter(request, response);
@@ -168,10 +231,14 @@ class SecurityConfiguration {
         private final String username;
         private final String roles;
 
-        UserContextRequestWrapper(HttpServletRequest request, JwtAuthenticationToken authentication) {
+        UserContextRequestWrapper(
+                HttpServletRequest request,
+                JwtAuthenticationToken authentication,
+                GatewayIdentityProperties identityProperties
+        ) {
             super(request);
             Jwt jwt = authentication.getToken();
-            this.userId = jwt.getSubject();
+            this.userId = resolveUserId(jwt, identityProperties.userIdByUsername());
             this.username = principalName(jwt);
             this.roles = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)

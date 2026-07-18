@@ -6,8 +6,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # HobbyBobby — frontend
 
-Next.js PWA: весь UI приложения. Бэка ещё нет, данные — моки за типизированным
-контрактом.
+Next.js PWA: весь UI приложения. Данные — моки или HTTP к бэку
+(`eventservice` напрямую / через `gateway :9000`).
 
 Это папка монорепо. Общие правила — в корневом `../AGENTS.md`.
 **Все команды ниже запускать из `frontend/`, не из корня репо.**
@@ -60,8 +60,11 @@ src/
 
 ### Подключение бэкенда
 
-Написать `httpClient: ApiClient` против `NEXT_PUBLIC_API_URL` и поменять одну
-строку в `lib/api/client.ts`. Экраны и хуки не трогаются.
+HTTP-клиенты в `lib/api/http/` + флаги `NEXT_PUBLIC_USE_MOCK_*`.
+Живой eventservice: `NEXT_PUBLIC_EVENT_API_URL` (прямой
+`http://localhost:9011/eventservice/api` или gateway `http://localhost:9000/api`).
+Через gateway нужен Bearer JWT; downstream identity — числовой `X-User-Id`
+(его ставит gateway). Подробности — `../docs/EVENT_SERVICE_IMPLEMENTATION_PLAN.md`.
 
 ## Грабли (проверено на практике)
 

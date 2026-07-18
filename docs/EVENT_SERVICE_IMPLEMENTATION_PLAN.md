@@ -4,7 +4,7 @@
 **Требования продукта** — в [EVENTS_SERVICE_MVP.md](./EVENTS_SERVICE_MVP.md).  
 **Контракт DTO** — [frontend/src/lib/api/types.ts](../frontend/src/lib/api/types.ts).
 
-*Обновлено: 2026-07-17 (leave организатора + normalize EventItem)*
+*Обновлено: 2026-07-18 (gateway + Keycloak; X-User-Id = domain Long)*
 
 ---
 
@@ -12,19 +12,34 @@
 
 ```
 backend/
-  eventservice/       — ивенты, теги, карта, чат, Kafka producer     :9011
-  userservice/        — пользователи, интересы                        :9002
-  realtime-service/   — WebSocket push (Kafka consumer)               :9003
+  gateway/            — Spring Cloud Gateway MVC, JWT resource server   :9000
+  eventservice/       — ивенты, теги, карта, чат, Kafka producer       :9011
+  userservice/        — пользователи, интересы                          :9002
+  realtime-service/   — WebSocket push (Kafka consumer)                 :9003
   chat-contract/      — общие Kafka DTO (composite build)
-  docker-compose.yml  — Postgres :5433, Kafka :9092
+  keycloak/realm/     — realm hobbybobby (import при старте Keycloak)
+  docker-compose.yml  — Postgres :5433, Kafka :9092, Keycloak :8080
   postgres/init/      — CREATE DATABASE eventservice, userservice
 
 frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 ```
 
-Стек: **Java 25**, **Spring Boot 4.1**, **Gradle 9.5.1**, **Postgres 17**, **Liquibase**, **Kafka**.
+Стек: **Java 25**, **Spring Boot 4.1**, **Gradle 9.5.1**, **Postgres 17**, **Liquibase**, **Kafka**, **Keycloak 26**.
 
-Аутентификация на MVP-этапе: заголовок **`X-User-Id`** (до JWT/Keycloak).
+### Аутентификация
+
+```
+Клиент  --Bearer JWT-->  Gateway :9000  --X-User-Id (Long)-->  eventservice / userservice
+                              |
+                         Keycloak :8080  (issuer realm hobbybobby)
+```
+
+- Снаружи: `GET/POST http://localhost:9000/api/...` + `Authorization: Bearer <access_token>`.
+- Gateway rewrite: `/api/**` → `/eventservice/api/**` или `/userservice/api/**`.
+- Downstream по-прежнему ждут **`X-User-Id: <Long>`** (= `users.id`), не Keycloak `sub` (UUID).
+- Резолв id (`resolveUserId`): claim `hobbybobby_user_id` → map `gateway.identity.user-id-by-username` (`demo` → `1`) → numeric `sub`.
+- Фильтр `UserContextBeforeFilter` (`apply`) пишет заголовки в `ServerRequest` (иначе proxy MVC их не прокидывал).
+- Demo: пользователь Keycloak `demo`/`demo`, client `hobbybobby-cli` или `hobbybobby-pwa`.
 
 ---
 
@@ -51,12 +66,12 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 | Чат: сообщения / отправка | Экран чата | `GET/POST .../chats/{eventId}/messages` | ✅ |
 | Kafka → realtime push | WS в чате | `ChatMessageProducer` | ✅ |
 | Обогащение author/participants | «Создал(а): Рома», LVL | `UserServiceClient` batch | ✅ |
-| Редактирование ивента | — | — | ❌ |
+| Редактирование ивента | Экран edit | `PUT /events/{id}` (организатор) | ✅ |
 | Удаление ивента | — | — | ❌ |
 | Платная публикация (реальный платёж) | Оплата 50 ₽ | заглушка `publishQuote` | ❌ |
 | Новостная лента (ранжирование) | — | отдельный `/feed` | ❌ |
 | Postgres FTS (`tsvector`) | — | `008-add-event-search-vector` + GIN | ✅ |
-| NL / умный поиск | «седня футбик в москоу» | parse → filters | ❌ |
+| NL / умный поиск | «седня футбик в москоу» | `POST /events/search/parse` + filters | ✅ |
 
 **Правило `isJoined`:** сервер вычисляет по наличию текущего пользователя в `participants` — не хранить отдельным флагом.
 
@@ -74,7 +89,7 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 | Поиск по email | ✅ |
 | Batch `findByIds` (для EventService) | ✅ |
 | Интересы пользователя | ✅ |
-| JWT / OAuth / Keycloak | ❌ |
+| JWT / OAuth / Keycloak | 🟡 IdP + gateway есть; userservice ещё без keycloak_sub |
 
 ### 2.3 Realtime Service (`backend/realtime-service`)
 
@@ -90,16 +105,17 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 | UI по эскизу (5 табов, моки) | ✅ |
 | HTTP-клиенты events/users/chats | ✅ |
 | Переключение моков через env | ✅ |
-| `X-User-Id` через `stores/auth` | ✅ |
+| `X-User-Id` через `stores/auth` (прямой :9011) | ✅ |
+| Bearer через gateway `:9000` | 🟡 бэк готов; фронт ещё на прямом URL / DEV user id |
 | Полный E2E без моков | 🟡 API OK; UI — ручной прогон в браузере |
 
 ### 2.5 Инфраструктура
 
 | Компонент | Статус |
 |---|---|
-| Docker Compose: Postgres + Kafka | ✅ |
+| Docker Compose: Postgres + Kafka + Keycloak | ✅ |
+| API Gateway (`backend/gateway`) | ✅ |
 | NotificationService | ❌ |
-| API Gateway / Keycloak в репо | ❌ (локальные черновики вне git) |
 
 ---
 
@@ -125,8 +141,8 @@ frontend/             — Next.js PWA; HTTP-клиенты в lib/api/http/
 Отменить ивент            →  POST /events/{id}/cancel (только организатор)
 ```
 
-Базовый URL: `http://localhost:9011/eventservice/api`  
-Заголовок: `X-User-Id: <id>`  
+Базовый URL (через gateway): `http://localhost:9000/api` + Bearer JWT.  
+Прямой (dev): `http://localhost:9011/eventservice/api` + `X-User-Id: <Long>`.  
 Контракт ответов — `EventItem`, `Page<EventItem>`, `EventPin`, `Tag` в `types.ts`.
 
 ---
@@ -185,13 +201,13 @@ UserService хранит пользователей отдельно в БД `us
 
 ### Фаза 5 — Доработки MVP
 
-- [ ] Редактирование ивента (организатор); удаление при необходимости
+- [x] Редактирование ивента (организатор); удаление при необходимости — edit ✅
 - [x] Postgres FTS вместо in-memory `matchesText` (база для NL-поиска)
 - [ ] Новостная лента `/feed` (подписки + теги + гео)
-- [ ] JWT + Gateway / Keycloak вместо `X-User-Id`
+- [x] JWT + Gateway / Keycloak (gateway ставит `X-User-Id`; фронт ещё может слать заголовок напрямую)
 - [ ] Реальная оплата публикации
 - [ ] NotificationService (push/email)
-- [ ] **Умный поиск (NL → фильтры)** — см. §11: правило-based intent, без LLM
+- [x] **Умный поиск (NL → фильтры)** — см. §11: правило-based intent, без LLM
 
 ### Фаза 6 — AI-поиск и персонализация
 
@@ -215,8 +231,9 @@ UserService хранит пользователей отдельно в БД `us
 ```bash
 cd backend
 cp .env.example .env
-docker compose up -d
+docker compose up -d                    # Postgres :5433, Kafka :9092, Keycloak :8080
 
+cd gateway && ./gradlew bootRun         # http://localhost:9000
 cd eventservice && ./gradlew bootRun    # http://localhost:9011
 cd userservice && ./gradlew bootRun     # http://localhost:9002
 cd realtime-service && ./gradlew bootRun # http://localhost:9003
@@ -224,31 +241,58 @@ cd realtime-service && ./gradlew bootRun # http://localhost:9003
 cd eventservice && ./scripts/seed-events.sh   # 20 тестовых ивентов
 ```
 
+### Gateway + Keycloak — проверка
+
+```bash
+# токен
+curl -s -X POST "http://localhost:8080/realms/hobbybobby/protocol/openid-connect/token" \
+  -d "grant_type=password&client_id=hobbybobby-cli&username=demo&password=demo"
+
+# без токена → 401
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/api/events?page=0&size=1
+
+# с Bearer → 200 (X-User-Id=1 внутри)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:9000/api/events?page=0&size=1"
+```
+
+Realm: `backend/keycloak/realm/hobbybobby-realm.json` (attribute `hobbybobby_user_id=1` + protocol mapper).  
+Локальный fallback без переимпорта realm: `gateway.identity.user-id-by-username.demo: "1"` в `gateway/src/main/resources/application.yaml`.
+
+**Важно:** `--import-realm` подхватывает JSON только при первом создании realm; чтобы обновить mapper/attribute — пересоздать контейнер Keycloak / volume или править в Admin UI.
+
 ### Порты и грабли (Windows)
 
 | Проблема | Решение |
 |---|---|
 | Postgres auth failed на `5432` | Локальный `postgres.exe` конфликтует с Docker → Postgres в compose на **5433** |
 | Port 9001 in use | `trantorAgent.exe` занимает 9001 → EventService на **9011** (`SERVER_PORT`) |
+| Gateway 500 на `/api/events` | `X-User-Id` был UUID `sub`; нужен Long — `UserContextBeforeFilter` + map/claim |
 | Gradle `major version 69` | IDE: Wrapper **9.5.1**, не bundled Gradle 8.5 |
-| `gradle-wrapper.properties not found` | Открывать `backend/eventservice`, не корень монорепо |
+| `gradle-wrapper.properties not found` | Открывать `backend/eventservice` (или `gateway`), не корень монорепо |
 | `ChatMessageCreatedEvent` not found | Зависимость `chat-contract` + Gradle Sync |
 
 ### IntelliJ
 
-- **Open:** `backend/eventservice` (или `userservice`, `realtime-service`, `chat-contract`)
+- **Open:** `backend/eventservice` (или `userservice`, `realtime-service`, `gateway`, `chat-contract`)
 - **Gradle distribution:** Wrapper
 - **Gradle JVM:** JDK 25
 
 ### Фронт с живым бэком
 
-`frontend/.env.local`:
+`frontend/.env.local` (пока прямой eventservice + `X-User-Id` из `stores/auth`):
 
 ```env
 NEXT_PUBLIC_USE_MOCK_EVENTS=false
 NEXT_PUBLIC_USE_MOCK_USERS=false
 NEXT_PUBLIC_USE_MOCK_CHATS=false
 NEXT_PUBLIC_EVENT_API_URL=http://localhost:9011/eventservice/api
+```
+
+Через gateway (после подключения Bearer на фронте):
+
+```env
+NEXT_PUBLIC_EVENT_API_URL=http://localhost:9000/api
 ```
 
 ### Postgres FTS — как устроено и как проверить
@@ -343,7 +387,7 @@ WHERE search_vector @@ to_tsquery('simple', 'футбик:*');
 | 2 | Рейтинг / LVL в карточке | Читать из UserService; рейтинг ивента = организатора |
 | 3 | Платная публикация 50 ₽ | `publishQuote` — заглушка до платёжки |
 | 4 | Формула ленты | Отложить до фазы 5 |
-| 5 | JWT vs X-User-Id | X-User-Id до Gateway/Keycloak |
+| 5 | JWT vs X-User-Id | ✅ Gateway + JWT; downstream всё ещё на Long `X-User-Id` |
 | 6 | AI-поиск: LLM vs только правила | Сначала правила + словари (§11); LLM — фаза 6 |
 | 7 | Город «Москва» без координат у ивента | Геокодинг адреса при create + таблица городов / bbox |
 
@@ -357,10 +401,10 @@ WHERE search_vector @@ to_tsquery('simple', 'футбик:*');
 |---|---|---|
 | NL / «умный» поиск | FTS закрывает сленг активностей; «седня/москоу» ещё нет | §11, фазы 5–6 |
 | Поиск не в SQL | ✅ Закрыто: `search_vector` + GIN | §6 FTS |
-| Edit/delete ивента | В MVP спеке есть, в API нет | фаза 5 |
+| Edit/delete ивента | Edit ✅ (`PUT`); delete ещё нет | фаза 5 |
 | Редактирование сообщений чата | В MVP есть, в API только send | бэклог чата |
 | Геокодинг при создании | Адрес текстом, пин часто «центр Москвы» | фаза 5–6 |
-| CORS / Gateway | Прямые вызовы :9011 с фронта | JWT + gateway |
+| CORS / Gateway | Gateway :9000 готов; фронт ещё часто на :9011 | переключить URL + Bearer |
 | Тесты контракта фронт↔бэк | DTO могут разъехаться | фаза 4 E2E |
 | Observability | Нет метрик/трейсов в плане | прод-готовность |
 | Capacity / EVENT_FULL UX | Есть на бэке, на фронте слабо описано | UI + i18n |
@@ -370,11 +414,11 @@ WHERE search_vector @@ to_tsquery('simple', 'футбик:*');
 
 ## 10. Следующие задачи (приоритет)
 
-1. **UI E2E:** `cd frontend && npm run dev` — список / детали / join / create / cancel ивента.
-2. **NL-поиск v1** — `POST /events/search/parse` → структурированные фильтры (§11.3).
-3. **Edit ивента** — только организатор (cancel уже есть).
-4. **JWT** — gateway + убрать `X-User-Id` с фронта.
-5. **CI** — сборка `eventservice` + `userservice` в pipeline.
+1. **UI E2E:** `cd frontend && npm run dev` — список / детали / join / create / cancel / edit.
+2. **Фронт → gateway** — Bearer Keycloak, `NEXT_PUBLIC_EVENT_API_URL=:9000/api`, убрать ручной `X-User-Id`.
+3. **Identity** — колонка/lookup `keycloak_sub` или стабильный claim вместо статичного map `demo→1`.
+4. **CI** — сборка `eventservice` + `userservice` + `gateway` в pipeline.
+5. **Удаление ивента / feed / оплата** — по бэклогу фазы 5.
 
 ---
 

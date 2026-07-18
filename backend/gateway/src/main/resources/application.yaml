@@ -21,6 +21,11 @@ gateway:
     user-service-url: ${USER_SERVICE_URL:http://localhost:9002}
   cors:
     allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  # Downstream (eventservice) ждёт Long X-User-Id = users.id, не Keycloak sub UUID.
+  # Приоритет: JWT claim hobbybobby_user_id, затем этот map по preferred_username.
+  identity:
+    user-id-by-username:
+      demo: "1"
 
 management:
   endpoints:

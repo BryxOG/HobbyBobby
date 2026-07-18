@@ -4,12 +4,10 @@
 верхнего уровня, каждая со своим стеком и сборкой.
 
 ```
-frontend/     Next.js PWA. Весь UI, работает на моках. См. frontend/AGENTS.md
-docs/         Общая документация: спека MVP и эскиз UI (источник истины)
+frontend/     Next.js PWA. См. frontend/AGENTS.md
+backend/      eventservice, userservice, realtime-service, gateway, chat-contract
+docs/         EVENTS_SERVICE_MVP.md, EVENT_SERVICE_IMPLEMENTATION_PLAN.md, sketch.excalidraw
 ```
-
-Позже рядом появятся `event-service/`, `user-service/`,
-`notification-service/` (Java Spring + Python).
 
 ## Правила монорепо
 
@@ -25,6 +23,9 @@ docs/         Общая документация: спека MVP и эскиз 
   `frontend/src/lib/api/types.ts`.** Это готовые DTO; новые сервисы равнять по
   ним, а не изобретать свои формы ответов. Точка подключения —
   `frontend/src/lib/api/client.ts`, там одна строка.
+- **Публичный HTTP-вход — gateway `:9000`** (`/api/...` + Bearer JWT). Downstream
+  сервисы слушают `/eventservice/api/...` и `/userservice/api/...`; gateway
+  делает rewrite и ставит числовой `X-User-Id` (не Keycloak `sub` UUID).
 - **Деплой фронта на Vercel: Root Directory = `frontend`**, иначе сборка не
   найдёт `package.json`.
 

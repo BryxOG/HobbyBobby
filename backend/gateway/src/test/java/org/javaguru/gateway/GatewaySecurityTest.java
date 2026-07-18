@@ -86,9 +86,24 @@ class GatewaySecurityTest {
                                 .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("path=/eventservice/api/events/ping")))
-                .andExpect(content().string(containsString("x-user-id=user-123")))
+                .andExpect(content().string(containsString("x-user-id=1")))
                 .andExpect(content().string(containsString("x-user-name=demo")))
                 .andExpect(content().string(containsString("x-user-roles=USER")));
+    }
+
+    @Test
+    void hobbybobbyUserIdClaimOverridesUsernameMapping() throws Exception {
+        mockMvc.perform(get("/api/events/ping")
+                        .with(jwt()
+                                .jwt(jwt -> jwt
+                                        .subject("user-123")
+                                        .claim("preferred_username", "demo")
+                                        .claim("hobbybobby_user_id", "7")
+                                        .claim("realm_access", Map.of("roles", List.of("USER")))
+                                )
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("x-user-id=7")));
     }
 
     private static void writeRequestSummary(HttpExchange exchange) throws IOException {
