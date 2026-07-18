@@ -111,6 +111,15 @@ export const httpEventsClient: Pick<ApiClient, "events" | "map" | "tags"> = {
       );
     },
 
+    async update(id: string, input: CreateEventInput): Promise<EventItem> {
+      return normalizeEvent(
+        await eventRequest<EventItem>(`/events/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(input),
+        }),
+      );
+    },
+
     async join(id: string): Promise<EventItem> {
       return normalizeEvent(
         await eventRequest<EventItem>(`/events/${id}/join`, { method: "POST" }),

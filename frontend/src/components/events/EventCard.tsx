@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { EventItem } from "@/lib/api/types";
 import { formatEventRange } from "@/lib/format";
 import { ru } from "@/lib/i18n/ru";
+import { useAuth } from "@/lib/stores/auth";
 import { ActivityIcon } from "./ActivityIcon";
 import { JoinButton } from "./JoinButton";
 
@@ -15,7 +16,10 @@ import { JoinButton } from "./JoinButton";
  * JoinButton clickable without nesting a button inside an anchor.
  */
 export function EventCard({ event }: { event: EventItem }) {
+  const userId = useAuth((s) => s.userId);
   const taken = event.participants.length;
+  const isOrganizer = userId != null && event.organizer.id === userId;
+  const showJoin = event.status !== "CANCELLED" && !isOrganizer;
 
   return (
     <article className="relative flex gap-3 rounded-card bg-surface p-3 transition-colors has-[a:active]:bg-elevated">
@@ -53,10 +57,11 @@ export function EventCard({ event }: { event: EventItem }) {
               <p className="text-[12px] text-fg-muted">{event.rating}/5⭐</p>
             )}
           </div>
-          {/* z-10 lifts the control above the card-wide link overlay. */}
-          <div className="relative z-10 shrink-0">
-            <JoinButton event={event} />
-          </div>
+          {showJoin && (
+            <div className="relative z-10 shrink-0">
+              <JoinButton event={event} />
+            </div>
+          )}
         </div>
       </div>
     </article>

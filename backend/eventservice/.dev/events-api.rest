@@ -72,3 +72,23 @@ X-User-Id: {{userId}}
 ### Отменить ивент (только организатор)
 POST {{baseUrl}}/events/e-basketball-1/cancel
 X-User-Id: {{userId}}
+
+### Редактировать ивент (только организатор)
+PUT {{baseUrl}}/events/e-basketball-1
+X-User-Id: {{userId}}
+Content-Type: application/json
+
+{
+  "title": "Баскетбол 3х3 — обновлено",
+  "activityId": "basketball",
+  "description": "Обновлённое описание",
+  "startsAt": "2026-08-01T18:00:00.000Z",
+  "endsAt": "2026-08-01T20:00:00.000Z",
+  "location": {
+    "lat": 55.7558,
+    "lng": 37.6173,
+    "address": "Лужники"
+  },
+  "capacity": 8,
+  "tagIds": ["t-friendly"]
+}

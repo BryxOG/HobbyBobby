@@ -6,11 +6,11 @@ import { ACTIVITIES } from "@/lib/activities";
 import {
   toEventListQuery,
   useEvents,
-  useMyEventsFeed,
+  useMyEvents,
   useParseSearch,
 } from "@/lib/api/hooks";
 import { USING_MOCKS } from "@/lib/api/client";
-import type { ActivityId } from "@/lib/api/types";
+import type { ActivityId, MyEventsScope } from "@/lib/api/types";
 import { ru } from "@/lib/i18n/ru";
 import { useAuth } from "@/lib/stores/auth";
 import { useDebounced } from "@/lib/useDebounced";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Header } from "@/components/ui/Header";
 import { SearchField } from "@/components/ui/SearchField";
+import { Segmented } from "@/components/ui/Segmented";
 import {
   EmptyState,
   ErrorState,
@@ -33,6 +34,7 @@ export default function EventsPage() {
   const isLoggedIn = USING_MOCKS || Boolean(userId);
 
   const [feedMode, setFeedMode] = useState<FeedMode>("all");
+  const [mineScope, setMineScope] = useState<MyEventsScope>("organizing");
   const [search, setSearch] = useState("");
   const [activities, setActivities] = useState<ActivityId[]>([]);
   const query = useDebounced(search);
@@ -51,7 +53,17 @@ export default function EventsPage() {
   }, [intent]);
 
   const allEvents = useEvents(filters, feedMode === "all");
-  const myEvents = useMyEventsFeed(filters, feedMode === "mine");
+  const organizing = useMyEvents(
+    "organizing",
+    filters,
+    feedMode === "mine" && mineScope === "organizing",
+  );
+  const participating = useMyEvents(
+    "participating",
+    filters,
+    feedMode === "mine" && mineScope === "participating",
+  );
+
   const {
     data,
     isPending,
@@ -60,7 +72,12 @@ export default function EventsPage() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = feedMode === "all" ? allEvents : myEvents;
+  } =
+    feedMode === "all"
+      ? allEvents
+      : mineScope === "organizing"
+        ? organizing
+        : participating;
 
   const events = data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -82,6 +99,16 @@ export default function EventsPage() {
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
     );
   }
+
+  const emptyTitle =
+    feedMode === "mine"
+      ? mineScope === "organizing"
+        ? ru.myEvents.emptyOrganizing
+        : ru.myEvents.emptyParticipating
+      : ru.events.empty;
+
+  const emptyHint =
+    feedMode === "mine" ? ru.events.emptyMineHint : ru.events.emptyHint;
 
   return (
     <>
@@ -129,6 +156,18 @@ export default function EventsPage() {
             ))}
           </div>
         </div>
+
+        {feedMode === "mine" && (
+          <Segmented
+            label={ru.events.myEvents}
+            value={mineScope}
+            onChange={setMineScope}
+            options={[
+              { value: "organizing", label: ru.myEvents.organizing },
+              { value: "participating", label: ru.myEvents.participating },
+            ]}
+          />
+        )}
       </div>
 
       <main className="flex-1 space-y-2 px-4 py-3">
@@ -136,16 +175,7 @@ export default function EventsPage() {
         {isError && <ErrorState onRetry={() => refetch()} />}
 
         {!isPending && !isError && events.length === 0 && (
-          <EmptyState
-            title={
-              feedMode === "mine" ? ru.events.emptyMine : ru.events.empty
-            }
-            hint={
-              feedMode === "mine"
-                ? ru.events.emptyMineHint
-                : ru.events.emptyHint
-            }
-          />
+          <EmptyState title={emptyTitle} hint={emptyHint} />
         )}
 
         {events.map((event) => (

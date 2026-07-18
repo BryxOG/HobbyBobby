@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -165,11 +166,11 @@ public class EventController {
     }
 
     /**
-     * Создаёт новый ивент.
+     * Отменяет ивент (только организатор).
      *
-     * @param request       данные ивента
-     * @param currentUserId организатор
-     * @return созданный ивент
+     * @param eventId       идентификатор ивента
+     * @param currentUserId текущий пользователь
+     * @return обновлённый ивент
      */
     @PostMapping("/{eventId}/cancel")
     public EventResponse cancel(
@@ -179,6 +180,30 @@ public class EventController {
         return eventService.cancel(eventId, currentUserId);
     }
 
+    /**
+     * Обновляет ивент (только организатор, не отменённый).
+     *
+     * @param eventId       идентификатор ивента
+     * @param request       новые поля
+     * @param currentUserId организатор
+     * @return обновлённый ивент
+     */
+    @PutMapping("/{eventId}")
+    public EventResponse update(
+            @PathVariable String eventId,
+            @Valid @RequestBody CreateEventRequest request,
+            @RequestHeader("X-User-Id") Long currentUserId
+    ) {
+        return eventService.update(eventId, request, currentUserId);
+    }
+
+    /**
+     * Создаёт новый ивент.
+     *
+     * @param request       данные ивента
+     * @param currentUserId организатор
+     * @return созданный ивент
+     */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EventResponse create(

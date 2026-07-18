@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/stores/auth";
 import type {
   ActivityId,
   ChatMessage,
+  CreateEventInput,
   EventItem,
   EventListQuery,
   MyEventsScope,
@@ -70,31 +71,6 @@ export function useEvents(query: EventListQuery = {}, active = true) {
   });
 }
 
-/** Лента «Мои ивенты» — организую + участвую, объединённые и отсортированные. */
-export function useMyEventsFeed(query: EventListQuery = {}, active = true) {
-  const userId = useAuth((s) => s.userId);
-  return useInfiniteQuery({
-    queryKey: qk.eventsMineFeed(query),
-    initialPageParam: null as string | null,
-    queryFn: async () => {
-      const [organizing, participating] = await Promise.all([
-        api.events.mine("organizing", query),
-        api.events.mine("participating", query),
-      ]);
-      const byId = new Map<string, EventItem>();
-      for (const event of [...organizing.items, ...participating.items]) {
-        byId.set(event.id, event);
-      }
-      const items = [...byId.values()].sort((a, b) =>
-        a.startsAt.localeCompare(b.startsAt),
-      );
-      return { items, nextCursor: null, total: items.length };
-    },
-    getNextPageParam: () => null,
-    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
-  });
-}
-
 export function useEvent(id: string) {
   const userId = useAuth((s) => s.userId);
   return useQuery({
@@ -104,14 +80,19 @@ export function useEvent(id: string) {
   });
 }
 
-export function useMyEvents(scope: MyEventsScope) {
+export function useMyEvents(
+  scope: MyEventsScope,
+  query: EventListQuery = {},
+  active = true,
+) {
   const userId = useAuth((s) => s.userId);
   return useInfiniteQuery({
-    queryKey: qk.eventsMine(scope),
+    queryKey: qk.eventsMine(scope, query),
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => api.events.mine(scope, { cursor: pageParam }),
+    queryFn: ({ pageParam }) =>
+      api.events.mine(scope, { ...query, cursor: pageParam }),
     getNextPageParam: (last) => last.nextCursor,
-    enabled: USING_MOCK_EVENTS || Boolean(userId),
+    enabled: active && (USING_MOCK_EVENTS || Boolean(userId)),
   });
 }
 
@@ -175,6 +156,20 @@ export function useCreateEvent() {
       qc.invalidateQueries({ queryKey: qk.events });
       qc.invalidateQueries({ queryKey: ["map"] });
       qc.invalidateQueries({ queryKey: qk.me });
+      qc.invalidateQueries({ queryKey: ["events", "mine"] });
+    },
+  });
+}
+
+export function useUpdateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: CreateEventInput }) =>
+      api.events.update(id, input),
+    onSuccess: (event) => {
+      qc.setQueryData(qk.eventDetail(event.id), event);
+      qc.invalidateQueries({ queryKey: qk.events });
+      qc.invalidateQueries({ queryKey: ["map"] });
       qc.invalidateQueries({ queryKey: ["events", "mine"] });
     },
   });

@@ -210,6 +210,7 @@ export interface ApiClient {
     get(id: string): Promise<EventItem>;
     mine(scope: MyEventsScope, query?: EventListQuery): Promise<Page<EventItem>>;
     create(input: CreateEventInput): Promise<EventItem>;
+    update(id: string, input: CreateEventInput): Promise<EventItem>;
     join(id: string): Promise<EventItem>;
     leave(id: string): Promise<EventItem>;
     publishQuote(): Promise<PublishQuote>;

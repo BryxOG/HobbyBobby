@@ -222,6 +222,47 @@ public class EventService {
     }
 
     /**
+     * Обновляет ивент организатором.
+     *
+     * @param eventId       идентификатор ивента
+     * @param request       новые поля
+     * @param currentUserId текущий пользователь
+     * @return обновлённая карточка
+     */
+    @Transactional
+    public EventResponse update(String eventId, CreateEventRequest request, Long currentUserId) {
+        EventEntity entity = requireEvent(eventId);
+        if (!entity.getOrganizerId().equals(currentUserId)) {
+            throw new ForbiddenException("Только организатор может редактировать ивент");
+        }
+        if (entity.getStatus() == EventStatus.CANCELLED) {
+            throw new ConflictException("Нельзя редактировать отменённый ивент");
+        }
+        if (!request.endsAt().isAfter(request.startsAt())) {
+            throw new ConflictException("Время окончания должно быть позже начала");
+        }
+        int participants = participantRepository.findUserIdsByEventId(eventId).size();
+        if (request.capacity() < participants) {
+            throw new ConflictException("Вместимость меньше числа участников");
+        }
+
+        entity.setTitle(request.title().trim());
+        entity.setActivityId(request.activityId());
+        entity.setDescription(request.description().trim());
+        entity.setStartsAt(request.startsAt());
+        entity.setEndsAt(request.endsAt());
+        entity.setLat(request.location().lat());
+        entity.setLng(request.location().lng());
+        entity.setAddress(request.location().address().trim());
+        entity.setCapacity(request.capacity());
+
+        eventRepository.save(entity);
+        replaceTags(entity.getId(), request.tagIds());
+
+        return getById(entity.getId(), currentUserId);
+    }
+
+    /**
      * Создаёт новый ивент от имени текущего пользователя.
      *
      * @param request       данные ивента
@@ -482,6 +523,17 @@ public class EventService {
             link.setId(id);
             eventTagRepository.save(link);
         }
+    }
+
+    /**
+     * Полностью заменяет теги ивента.
+     *
+     * @param eventId идентификатор ивента
+     * @param tagIds  новые идентификаторы тегов
+     */
+    private void replaceTags(String eventId, List<String> tagIds) {
+        eventTagRepository.deleteByIdEventId(eventId);
+        saveTags(eventId, tagIds);
     }
 
     /**
